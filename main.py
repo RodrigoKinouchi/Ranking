@@ -164,6 +164,56 @@ vitorias_principal_filtradas = {
 vitorias_gerais_filtradas = {
     piloto: vitoria for piloto, vitoria in vitorias_gerais.items() if vitoria > 0}
 
+
+def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrida):
+    """
+    Gera um gráfico de linha mostrando a evolução de cada piloto ao longo das corridas.
+
+    Parâmetros:
+    - df: DataFrame com os dados de corridas.
+    - corridas_sprint: Lista com as colunas das corridas Sprint.
+    - corridas_principal: Lista com as colunas das corridas Principal.
+    - tipo_corrida: Tipo de corrida ('Sprint' ou 'Principal').
+
+    Retorna:
+    - gráfico de linha
+    """
+    if tipo_corrida == 'Sprint':
+        colunas_corridas = corridas_sprint
+    else:
+        colunas_corridas = corridas_principal
+
+    # Criar um gráfico de linhas
+    fig = go.Figure()
+
+    # Adicionar uma linha para cada piloto
+    for piloto in df['Piloto'].unique():
+        # Filtrar os dados do piloto
+        dados_piloto = df[df['Piloto'] == piloto]
+
+        # Selecionar as pontuações nas corridas específicas
+        pontuacoes = dados_piloto[colunas_corridas].values.flatten()
+
+        # Adicionar a linha no gráfico
+        fig.add_trace(go.Scatter(
+            x=list(range(1, len(colunas_corridas) + 1)),  # Número da corrida
+            y=pontuacoes,
+            mode='lines+markers',
+            name=piloto
+        ))
+
+    # Adicionar detalhes ao gráfico
+    fig.update_layout(
+        title=f'Evolução dos Pilotos nas Corridas {tipo_corrida}',
+        xaxis_title='Corridas',
+        yaxis_title='Pontuação',
+        showlegend=True
+    )
+
+    # Exibir o gráfico
+    return fig
+
+
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
                'Principal', 'Análise de consistência'])
@@ -316,6 +366,11 @@ with tabs[2]:
         # Exibindo o gráfico de vitórias Sprint
         st.plotly_chart(fig_sprint)
 
+        st.subheader("Evolução dos Pilotos - Corridas Sprint")
+        fig_sprint = plotar_grafico_evolucao(
+            df, corridas_sprint, corridas_principal, tipo_corrida='Sprint')
+        st.plotly_chart(fig_sprint)
+
     else:
         st.write("Nenhum piloto com vitórias foi encontrado.")
 
@@ -385,6 +440,11 @@ with tabs[3]:
 
         # Exibir a tabela do ranking Principal
         st.dataframe(df_ranking_principal_styled)
+
+        st.subheader("Evolução dos Pilotos - Corridas Principal")
+        fig_principal = plotar_grafico_evolucao(
+            df, corridas_sprint, corridas_principal, tipo_corrida='Principal')
+        st.plotly_chart(fig_principal)
 
 with tabs[4]:
     st.write("### Análise de Consistência")
