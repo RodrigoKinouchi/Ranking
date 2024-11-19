@@ -44,22 +44,38 @@ novo_cabecalho = ["Posição", "Numeral", "Piloto", "Equipe", "Modelo",
                   "16", "17", "18", "19", "20", "21", "22", "Descarte", "23", "24", "Soma"
                   ]
 df.columns = novo_cabecalho
+
+# Cria uma lista com as colunas do DataFrame, colocando "Soma" na posição desejada
+novas_colunas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+                 "16", "17", "18", "19", "20", "21", "22", "23", "24", "Descarte"] + \
+    [col for col in df.columns if col not in ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+                                              "16", "17", "18", "19", "20", "21", "22", "23", "24", "Descarte"]]
+
+df = df[novas_colunas]
 df = df.drop(index=0)
 
-# Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 a 22)
-df.iloc[:, 5:27] = df.iloc[:, 5:27].replace("NC", 0)
+# Input do usuário para a última corrida
+ultima_corrida = st.number_input(
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=22, step=1)
+
+# Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 até a última corrida informada)
+df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
+                                         5:ultima_corrida+6].replace("NC", 0)
 
 # Passo 2: Converter as colunas de pontuação para numérico, forçando erros para NaN
-df.iloc[:, 5:27] = df.iloc[:, 5:27].apply(pd.to_numeric, errors='coerce')
+df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
+                                         5:ultima_corrida+6].apply(pd.to_numeric, errors='coerce')
 
 # Passo 3: Substituir "DSC" por NaN para que essas corridas não sejam consideradas no cálculo do descarte
-df.iloc[:, 5:27] = df.iloc[:, 5:27].replace("DSC", pd.NA)
+df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
+                                         5:ultima_corrida+6].replace("DSC", pd.NA)
 
 # Passo 4: Remover casas decimais (forçando as colunas de pontuação para inteiros)
-df.iloc[:, 5:27] = df.iloc[:, 5:27].fillna(0).round(0).astype(int)
+df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
+                                         5:ultima_corrida+6].fillna(0).round(0).astype(int)
 
 # Passo 5: Calcular o "Descarte" (menor pontuação válida, ignorando "DSC")
-df['Descarte'] = df.iloc[:, 5:27].min(axis=1, skipna=True)
+df['Descarte'] = df.iloc[:, 5:ultima_corrida+6].min(axis=1, skipna=True)
 
 
 pontuacao_sprint = {
@@ -76,20 +92,83 @@ pontuacao_principal = {
     31: 0, 32: 0, 33: 0, 34: 0
 }
 
+# Separar as corridas Sprint (ímpares) e Principal (pares)
+corridas_sprint = [col for idx, col in enumerate(
+    df.columns[6:29]) if (idx + 1) % 2 != 0]  # Ímpares
+corridas_principal = [col for idx, col in enumerate(
+    df.columns[6:29]) if (idx + 1) % 2 == 0]  # Pares
+
+# Função para calcular a soma das pontuações por tipo de corrida (Sprint ou Principal)
+
+
+def calcular_ranking(tipo_corrida, colunas_corridas):
+    # Copiar o DataFrame original com as colunas necessárias
+    df_rank = df[['Piloto', 'Equipe'] + colunas_corridas].copy()
+
+    # Converter os valores das colunas de corridas para numérico, forçando erros para NaN
+    df_rank[colunas_corridas] = df_rank[colunas_corridas].apply(
+        pd.to_numeric, errors='coerce')
+
+    # Calcular a soma das pontuações por piloto
+    df_rank['Soma'] = df_rank[colunas_corridas].sum(axis=1)
+
+    # Ordenar pelo total da soma de forma decrescente
+    df_rank = df_rank.sort_values(by='Soma', ascending=False)
+
+    # Recalcular a posição (ranking) com base na soma
+    df_rank['Posição'] = df_rank['Soma'].rank(
+        ascending=False, method='min').astype(int)
+
+    # Selecionar as colunas desejadas para exibir
+    df_rank = df_rank[['Posição', 'Piloto', 'Equipe', 'Soma']]
+
+    # Exibir o ranking calculado
+    return df_rank
+
+
+# Corridas Sprint (ímpares)
+corridas_sprint = [col for idx, col in enumerate(
+    df.columns[6:29]) if (idx + 1) % 2 != 0]
+# Corridas Principal (pares)
+corridas_principal = [col for idx, col in enumerate(
+    df.columns[6:29]) if (idx + 1) % 2 == 0]
+
+# Passo 1: Contar vitórias em cada tipo de corrida (Sprint e Principal)
+vitorias_sprint = {}
+vitorias_principal = {}
+vitorias_gerais = {}
+
+# Loop pelas linhas do DataFrame para contar as vitórias de cada piloto nas corridas Sprint e Principal
+for _, row in df.iterrows():
+    piloto = row['Piloto']
+
+    # Contando vitórias nas corridas Sprint (ímpares) - valores 55
+    vitorias_sprint_count = (row.iloc[6:27:2] == 55).sum()
+
+    # Contando vitórias nas corridas Principal (pares) - valores 80
+    vitorias_principal_count = (row.iloc[7:27:2] == 80).sum()
+
+    # Somando vitórias gerais (Sprint + Principal)
+    vitorias_geral_count = vitorias_sprint_count + vitorias_principal_count
+
+    # Armazenando o total de vitórias Sprint, Principal e Geral por piloto
+    vitorias_sprint[piloto] = vitorias_sprint_count
+    vitorias_principal[piloto] = vitorias_principal_count
+    vitorias_gerais[piloto] = vitorias_geral_count
+
+# Filtrando apenas pilotos que venceram ao menos uma corrida em cada tipo
+vitorias_sprint_filtradas = {
+    piloto: vitoria for piloto, vitoria in vitorias_sprint.items() if vitoria > 0}
+vitorias_principal_filtradas = {
+    piloto: vitoria for piloto, vitoria in vitorias_principal.items() if vitoria > 0}
+vitorias_gerais_filtradas = {
+    piloto: vitoria for piloto, vitoria in vitorias_gerais.items() if vitoria > 0}
+
 # Criando abas de visualização
-tabs = st.tabs(['Pilotos', 'Equipes', 'Wins', 'Análise de consistência'])
+tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
+               'Principal', 'Análise de consistência'])
 
 with tabs[0]:
-
-    coluna_soma = 'Soma'
-
-    # Cria uma lista com as colunas do DataFrame, colocando "Soma" na posição desejada
-    novas_colunas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma'] + \
-        [col for col in df.columns if col not in [
-            'Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma']]
-
-    # Reorganiza o DataFrame com a nova ordem de colunas
-    df = df[novas_colunas]
 
     # Função para aplicar estilos ao DataFrame
     def colorir_piloto(row):
@@ -176,39 +255,7 @@ with tabs[1]:
         axis="index"), use_container_width=True)
 
 with tabs[2]:
-
-    # Passo 1: Contar vitórias em cada tipo de corrida (Sprint e Principal)
-    vitorias_sprint = {}
-    vitorias_principal = {}
-    vitorias_gerais = {}
-
-    # Loop pelas linhas do DataFrame para contar as vitórias de cada piloto nas corridas Sprint e Principal
-    for _, row in df.iterrows():
-        piloto = row['Piloto']
-
-        # Contando vitórias nas corridas Sprint (ímpares) - valores 55
-        vitorias_sprint_count = (row.iloc[6:27:2] == 55).sum()
-
-        # Contando vitórias nas corridas Principal (pares) - valores 80
-        vitorias_principal_count = (row.iloc[7:27:2] == 80).sum()
-
-        # Somando vitórias gerais (Sprint + Principal)
-        vitorias_geral_count = vitorias_sprint_count + vitorias_principal_count
-
-        # Armazenando o total de vitórias Sprint, Principal e Geral por piloto
-        vitorias_sprint[piloto] = vitorias_sprint_count
-        vitorias_principal[piloto] = vitorias_principal_count
-        vitorias_gerais[piloto] = vitorias_geral_count
-
-    # Filtrando apenas pilotos que venceram ao menos uma corrida em cada tipo
-    vitorias_sprint_filtradas = {
-        piloto: vitoria for piloto, vitoria in vitorias_sprint.items() if vitoria > 0}
-    vitorias_principal_filtradas = {
-        piloto: vitoria for piloto, vitoria in vitorias_principal.items() if vitoria > 0}
-    vitorias_gerais_filtradas = {
-        piloto: vitoria for piloto, vitoria in vitorias_gerais.items() if vitoria > 0}
-
-    # Passo 2: Criar gráfico de pizza para vitórias gerais
+    # Criar gráfico de pizza para vitórias gerais
     if vitorias_gerais_filtradas:
         data_gerais = {
             "Piloto": list(vitorias_gerais_filtradas.keys()),
@@ -233,9 +280,9 @@ with tabs[2]:
         )
 
         # Exibindo o gráfico de vitórias gerais
-        st.plotly_chart(fig_gerais)
+        # st.plotly_chart(fig_gerais)
 
-    # Passo 3: Criar gráfico de pizza para vitórias nas corridas Sprint
+    # Criar gráfico de pizza para vitórias nas corridas Sprint
     if vitorias_sprint_filtradas:
         data_sprint = {
             "Piloto": list(vitorias_sprint_filtradas.keys()),
@@ -251,7 +298,7 @@ with tabs[2]:
                             )
 
         fig_sprint.update_layout(
-            title_x=0.45,  # Centralizando o título
+            title_x=0.42,  # Centralizando o título
             title_y=0.95,  # Ajustando a posição do título
             showlegend=True,
             legend_title="Pilotos",
@@ -269,7 +316,26 @@ with tabs[2]:
         # Exibindo o gráfico de vitórias Sprint
         st.plotly_chart(fig_sprint)
 
-    # Passo 4: Criar gráfico de pizza para vitórias nas corridas Principal
+    else:
+        st.write("Nenhum piloto com vitórias foi encontrado.")
+
+    st.write("## Ranking de Pilotos - Corridas Sprint")
+
+    # Calcular o ranking para as corridas Sprint
+    df_ranking_sprint = calcular_ranking('Corridas Sprint', corridas_sprint)
+
+    # Corrigir a coluna "Soma" para não ter casas decimais
+    df_ranking_sprint['Soma'] = df_ranking_sprint['Soma'].round(0).astype(int)
+
+    # Aplicar a estilização no DataFrame
+    df_ranking_sprint_styled = df_ranking_sprint.style.apply(
+        colorir_piloto, axis=1)
+
+    # Exibir a tabela do ranking Sprint
+    st.dataframe(df_ranking_sprint_styled)
+
+with tabs[3]:
+    # Criar gráfico de pizza para vitórias nas corridas Principal
     if vitorias_principal_filtradas:
         data_principal = {
             "Piloto": list(vitorias_principal_filtradas.keys()),
@@ -303,19 +369,33 @@ with tabs[2]:
         # Exibindo o gráfico de vitórias Principal
         st.plotly_chart(fig_principal)
 
-    else:
-        st.write("Nenhum piloto com vitórias foi encontrado.")
+        st.write("## Ranking de Pilotos - Corridas Principal")
 
-with tabs[3]:
+        # Calcular o ranking para as corridas Principal
+        df_ranking_principal = calcular_ranking(
+            'Corridas Principal', corridas_principal)
+
+        # Corrigir a coluna "Soma" para não ter casas decimais
+        df_ranking_principal['Soma'] = df_ranking_principal['Soma'].round(
+            0).astype(int)
+
+        # Aplicar a estilização no DataFrame
+        df_ranking_principal_styled = df_ranking_principal.style.apply(
+            colorir_piloto, axis=1)
+
+        # Exibir a tabela do ranking Principal
+        st.dataframe(df_ranking_principal_styled)
+
+with tabs[4]:
     st.write("### Análise de Consistência")
     # Contar o número total de corridas (colunas de pontuação)
     # Assumindo que as colunas de pontuação começam na posição 5 até a penúltima
     df = df.drop(columns=['Descarte'])
-    total_corridas = 20
+    total_corridas = ultima_corrida
 
     # Calcular o número de corridas participadas (onde a pontuação é diferente de zero)
-    df['Corridas Participadas'] = df.iloc[:, 7:-
-                                          1].apply(lambda x: (x != 0).sum(), axis=1)
+    df['Corridas Participadas'] = df.iloc[:, 5:ultima_corrida +
+                                          5].apply(lambda x: (x != 0).sum(), axis=1)
 
     # Calcular o número de abandonos (total de corridas - corridas participadas)
     df['Abandonos'] = total_corridas - df['Corridas Participadas']
@@ -325,7 +405,7 @@ with tabs[3]:
     st.dataframe(df[['Piloto', 'Abandonos']])
 
     # Média de Pontuação por Corrida (Ordenada)
-    df['Média por Corrida'] = df.iloc[:, 6:26].apply(
+    df['Média por Corrida'] = df.iloc[:, 6:ultima_corrida+5].apply(
         pd.to_numeric, errors='coerce').mean(axis=1)
     df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False)
     st.write("#### Ranking de Pilotos por Média de Pontuação por Corrida")
@@ -333,7 +413,7 @@ with tabs[3]:
         df_sorted_by_media[['Piloto', 'Média por Corrida']])
 
     # Desvio Padrão da Pontuação (Ordenado do Menor para o Maior)
-    df['Desvio Padrão'] = df.iloc[:, 6:26].apply(
+    df['Desvio Padrão'] = df.iloc[:, 6:ultima_corrida+5].apply(
         pd.to_numeric, errors='coerce').std(axis=1)
     df_sorted_by_std = df.sort_values(
         'Desvio Padrão', ascending=True)  # Menor para maior desvio
