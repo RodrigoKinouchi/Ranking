@@ -143,10 +143,10 @@ for _, row in df.iterrows():
     piloto = row['Piloto']
 
     # Contando vitórias nas corridas Sprint (ímpares) - valores 55
-    vitorias_sprint_count = (row.iloc[6:27:2] == 55).sum()
+    vitorias_sprint_count = (row.iloc[6:30:2] == 55).sum()
 
     # Contando vitórias nas corridas Principal (pares) - valores 80
-    vitorias_principal_count = (row.iloc[7:27:2] == 80).sum()
+    vitorias_principal_count = (row.iloc[7:30:2] == 80).sum()
 
     # Somando vitórias gerais (Sprint + Principal)
     vitorias_geral_count = vitorias_sprint_count + vitorias_principal_count
@@ -163,6 +163,77 @@ vitorias_principal_filtradas = {
     piloto: vitoria for piloto, vitoria in vitorias_principal.items() if vitoria > 0}
 vitorias_gerais_filtradas = {
     piloto: vitoria for piloto, vitoria in vitorias_gerais.items() if vitoria > 0}
+
+# Utilizando mesma lógica mas agora para equipes
+# Inicializando os dicionários para contar as vitórias das equipes nas corridas Sprint e Principal
+vitorias_sprint_equipes = {}
+vitorias_principal_equipes = {}
+
+# Loop pelas linhas do DataFrame para contar as vitórias de cada piloto nas corridas Sprint e Principal
+for _, row in df.iterrows():
+    piloto = row['Piloto']
+
+    # Identificando a equipe do piloto (supondo que a coluna 'Equipe' exista)
+    equipe = row['Equipe']
+
+    # Contando as vitórias nas corridas Sprint (ímpares) - valores 55
+    vitorias_sprint_count = (row[corridas_sprint] == 55).sum()
+
+    # Contando as vitórias nas corridas Principal (pares) - valores 80
+    vitorias_principal_count = (row[corridas_principal] == 80).sum()
+
+    # Atualizando a contagem de vitórias para cada equipe
+    if vitorias_sprint_count > 0:
+        if equipe not in vitorias_sprint_equipes:
+            vitorias_sprint_equipes[equipe] = 0
+        vitorias_sprint_equipes[equipe] += vitorias_sprint_count
+
+    if vitorias_principal_count > 0:
+        if equipe not in vitorias_principal_equipes:
+            vitorias_principal_equipes[equipe] = 0
+        vitorias_principal_equipes[equipe] += vitorias_principal_count
+
+# Convertendo as vitórias para DataFrames
+vitorias_sprint_df = pd.DataFrame(
+    list(vitorias_sprint_equipes.items()), columns=['Equipe', 'Vitórias Sprint'])
+vitorias_principal_df = pd.DataFrame(list(
+    vitorias_principal_equipes.items()), columns=['Equipe', 'Vitórias Principal'])
+
+# Unindo os DataFrames de vitórias Sprint e Principal
+vitorias_df = pd.merge(
+    vitorias_sprint_df, vitorias_principal_df, on='Equipe', how='outer').fillna(0)
+
+# Somando as vitórias gerais (Sprint + Principal) por equipe
+vitorias_df['Vitórias Totais'] = vitorias_df['Vitórias Sprint'] + \
+    vitorias_df['Vitórias Principal']
+
+# Ordenando as equipes pelo número total de vitórias
+vitorias_df = vitorias_df.sort_values(by='Vitórias Totais', ascending=False)
+
+# Gerando o gráfico de vitórias das equipes nas corridas Sprint
+fig_sprint_equipes = px.pie(vitorias_df,
+                            names='Equipe',
+                            values='Vitórias Sprint',
+                            title='Distribuição de Vitórias por Equipe - Corridas Sprint',
+                            color='Equipe',
+                            color_discrete_sequence=px.colors.qualitative.Set3)
+
+
+# Gerando o gráfico de vitórias das equipes nas corridas Principais
+fig_principal_equipes = px.pie(vitorias_df,
+                               names='Equipe',
+                               values='Vitórias Principal',
+                               title='Distribuição de Vitórias por Equipe - Corridas Principal',
+                               color='Equipe',
+                               color_discrete_sequence=px.colors.qualitative.Set1)
+
+# Gerando o gráfico de vitórias totais por equipe
+fig_total_equipes = px.pie(vitorias_df,
+                           names='Equipe',
+                           values='Vitórias Totais',
+                           title='Distribuição de Vitórias Totais por Equipe',
+                           color='Equipe',
+                           color_discrete_sequence=px.colors.qualitative.Pastel)
 
 
 def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrida):
@@ -250,7 +321,7 @@ with tabs[0]:
 
 with tabs[1]:
     # Passo 6: Agrupar por equipe e somar as pontuações
-    colunas_pontuacao = df.columns[5:28].tolist() + df.columns[29:31].tolist()
+    colunas_pontuacao = df.columns[6:30].tolist()
 
     # Verificar se todas as colunas de pontuação são numéricas antes de realizar a soma
     df[colunas_pontuacao] = df[colunas_pontuacao].apply(
@@ -258,6 +329,9 @@ with tabs[1]:
 
     # Agrupar por equipe e somar as pontuações de cada corrida
     df_equipes = df.groupby('Equipe')[colunas_pontuacao].sum()
+
+    # Criar a coluna "Soma" com a soma das pontuações de cada equipe
+    df_equipes['Soma'] = df_equipes[colunas_pontuacao].sum(axis=1)
 
     # Resetar o índice para trazer 'Equipe' de volta como uma coluna normal
     df_equipes_sorted = df_equipes.reset_index()
@@ -303,6 +377,10 @@ with tabs[1]:
     st.write("### Tabela de Pontuação por Equipe")
     st.dataframe(df_equipes_styled.hide(
         axis="index"), use_container_width=True)
+
+    # Exibe o gráfico de vitórias totais
+    st.subheader("Vitórias Totais por Equipe")
+    st.plotly_chart(fig_total_equipes)
 
 with tabs[2]:
     # Criar gráfico de pizza para vitórias gerais
@@ -389,6 +467,10 @@ with tabs[2]:
     # Exibir a tabela do ranking Sprint
     st.dataframe(df_ranking_sprint_styled)
 
+    # Exibe o gráfico de vitórias Sprint
+    st.subheader("Vitórias nas Corridas Sprint")
+    st.plotly_chart(fig_sprint_equipes)
+
 with tabs[3]:
     # Criar gráfico de pizza para vitórias nas corridas Principal
     if vitorias_principal_filtradas:
@@ -446,6 +528,10 @@ with tabs[3]:
             df, corridas_sprint, corridas_principal, tipo_corrida='Principal')
         st.plotly_chart(fig_principal)
 
+        # Exibe o gráfico de vitórias Principal
+        st.subheader("Vitórias nas Corridas Principais")
+        st.plotly_chart(fig_principal_equipes)
+
 with tabs[4]:
     st.write("### Análise de Consistência")
     # Contar o número total de corridas (colunas de pontuação)
@@ -465,8 +551,7 @@ with tabs[4]:
     st.dataframe(df[['Piloto', 'Abandonos']])
 
     # Média de Pontuação por Corrida (Ordenada)
-    df['Média por Corrida'] = df.iloc[:, 6:ultima_corrida+5].apply(
-        pd.to_numeric, errors='coerce').mean(axis=1)
+    df['Média por Corrida'] = df['Soma'] / ultima_corrida
     df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False)
     st.write("#### Ranking de Pilotos por Média de Pontuação por Corrida")
     st.dataframe(
