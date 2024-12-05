@@ -287,7 +287,7 @@ def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrid
 
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-               'Principal', 'Análise de consistência'])
+               'Principal', 'Análise de consistência', 'Manual'])
 
 with tabs[0]:
 
@@ -574,3 +574,53 @@ with tabs[4]:
         template="plotly_dark"
     )
     st.plotly_chart(fig)
+
+with tabs[5]:
+    # Calculando a próxima corrida
+    proxima_corrida = ultima_corrida + 1
+
+    # Verifica se o número da próxima corrida está dentro do limite de corridas
+    if proxima_corrida <= 24:
+        # Exibe a tabela interativa para o usuário editar as pontuações da próxima corrida
+        st.subheader(f"Insira as pontuações para a Corrida {proxima_corrida}")
+
+        # Definindo o nome da coluna da próxima corrida a ser editada
+        coluna_corrida = ultima_corrida+1
+        proxima_corrida = str(proxima_corrida)
+
+        # Criando uma cópia do DataFrame com apenas as colunas de interesse para a próxima corrida
+        df_editavel = df[['Piloto', 'Equipe', proxima_corrida]]
+
+        # Exibindo a tabela para edição interativa
+        df_editavel = st.data_editor(df_editavel)
+
+        # Atualiza as pontuações quando o botão for pressionado
+        if st.button("Atualizar Pontuações"):
+            # Atualiza as pontuações inseridas pelo usuário
+            for i, row in df_editavel.iterrows():
+                nova_pontuacao = row[proxima_corrida]
+                if pd.notna(nova_pontuacao) and nova_pontuacao != 0:
+                    df.at[i, proxima_corrida] = nova_pontuacao
+
+            df[proxima_corrida] = df[proxima_corrida].fillna(
+                0)
+            df["Soma"] = df["Soma"] + df[proxima_corrida]
+            df["Soma"] = df["Soma"].round(0).astype(int)
+            df[proxima_corrida] = df[proxima_corrida].round(0).astype(int)
+
+            # Ordenar o DataFrame do maior para o menor pela coluna "Soma"
+            df = df.sort_values(by="Soma", ascending=False)
+
+            # Atualizar a coluna "Posição" com base na nova ordem
+            df["Posição"] = range(1, len(df) + 1)
+            df_filtered = df.iloc[:, :ultima_corrida+7]
+
+            # Aplicando o estilo no DataFrame
+            df_styled = df_filtered.style.apply(colorir_piloto, axis=1)
+
+            # Exibe o DataFrame atualizado
+            st.success(f"Pontuações da Corrida {
+                       proxima_corrida} atualizadas com sucesso!")
+            st.dataframe(df_styled, use_container_width=True)
+    else:
+        st.warning("A próxima corrida ultrapassa o número máximo de 24 corridas.")
