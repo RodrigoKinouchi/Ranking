@@ -690,6 +690,10 @@ with tabs[5]:
 with tabs[6]:
     def campeonato_por_modelo(df, ultima_corrida):
         resultado_campeonato = {}
+        logos = {
+            'Corolla': 'images/toyota.png',
+            'Cruze': 'images/chev.png'
+        }
 
         # Filtra os modelos para considerar apenas "Corolla" e "Cruze"
         df_filtrado = df[df['Modelo'].isin(['Corolla', 'Cruze'])]
@@ -719,16 +723,35 @@ with tabs[6]:
         df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
                                      'Modelo', 'Pontuação Atual'])
 
-        # Verifique o conteúdo do DataFrame
-        print("DataFrame Campeonato (após filtro):\n", df_campeonato)
+        # Adiciona logos ao DataFrame
+        df_campeonato['Logo'] = df_campeonato['Modelo'].apply(
+            lambda x: logos[x])
 
         return df_campeonato
 
-    # Chama a função para calcular o campeonato por modelo e armazena o retorno em df_campeonato
+    def exibir_tabela_com_logos(df_campeonato):
+        # Usando st.columns para criar duas colunas: uma para Corolla e outra para Cruze
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Informações do Corolla
+            corolla_row = df_campeonato[df_campeonato['Modelo']
+                                        == 'Corolla'].iloc[0]
+            st.image(corolla_row['Logo'], width=200)  # Exibe o logo do Corolla
+            # Exibe a pontuação do Corolla
+            st.write(f"**Pontuação:** {corolla_row['Pontuação Atual']} pontos")
+
+        with col2:
+            # Informações do Cruze
+            cruze_row = df_campeonato[df_campeonato['Modelo']
+                                      == 'Cruze'].iloc[0]
+            st.image(cruze_row['Logo'], width=200)  # Exibe o logo do Cruze
+            st.write(f"**Pontuação:** {cruze_row['Pontuação Atual']} pontos")
+
     df_campeonato = campeonato_por_modelo(df, ultima_corrida)
 
-    # Exibe o DataFrame resultante no Streamlit
-    st.write(df_campeonato)
+    # Exibe a tabela com logos e pontuação
+    exibir_tabela_com_logos(df_campeonato)
 
     def evolucao_pontuacao(df, ultima_corrida):
         # Inicializa um dicionário para armazenar as pontuações por corrida para cada modelo
@@ -818,6 +841,12 @@ with tabs[6]:
         df_melted = df_acumulado_sem_soma.melt(
             id_vars=["Modelo"], var_name="Corrida", value_name="Pontuação Acumulada")
 
+        # Definindo as cores personalizadas para os modelos
+        color_map = {
+            "Corolla": "red",  # Corolla em vermelho
+            "Cruze": "orange"  # Cruze em laranja
+        }
+
         # Cria o gráfico de linha interativo com Plotly
         fig = px.line(df_melted,
                       x="Corrida",
@@ -827,7 +856,8 @@ with tabs[6]:
                       title="Evolução Acumulada das Pontuações ao Longo das Corridas",
                       labels={"Pontuação Acumulada": "Pontuação Acumulada",
                               "Corrida": "Corridas"},
-                      markers=True)
+                      markers=True,
+                      color_discrete_map=color_map)
 
         # Exibe o gráfico no Streamlit
         st.plotly_chart(fig, use_container_width=True)
