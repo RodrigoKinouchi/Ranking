@@ -59,23 +59,61 @@ ultima_corrida = st.number_input(
     "Informe o número da última corrida realizada", min_value=1, max_value=24, value=22, step=1)
 
 # Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 até a última corrida informada)
-df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
-                                         5:ultima_corrida+6].replace("NC", 0)
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
+                                         6:ultima_corrida+6].replace("NC", 0)
 
-# Passo 2: Converter as colunas de pontuação para numérico, forçando erros para NaN
-df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
-                                         5:ultima_corrida+6].apply(pd.to_numeric, errors='coerce')
+# Passo 2: Substituir "DSC" por NaN para que essas corridas não sejam consideradas no cálculo do descarte
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
+                                         6:ultima_corrida+6].replace("DSC", pd.NA)
 
-# Passo 3: Substituir "DSC" por NaN para que essas corridas não sejam consideradas no cálculo do descarte
-df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
-                                         5:ultima_corrida+6].replace("DSC", pd.NA)
+# Passo 3: Substituir "EXC" por NaN para que essa corrida não seja considerada para descarte e soma
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
+                                         6:ultima_corrida+6].replace("EXC", pd.NA)
 
-# Passo 4: Remover casas decimais (forçando as colunas de pontuação para inteiros)
-df.iloc[:, 5:ultima_corrida+6] = df.iloc[:,
-                                         5:ultima_corrida+6].fillna(0).round(0).astype(int)
+# Passo 4: Converter as colunas de pontuação para numérico, forçando erros para NaN
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
+                                         6:ultima_corrida+6].apply(pd.to_numeric, errors='coerce')
 
-# Passo 5: Calcular o "Descarte" (menor pontuação válida, ignorando "DSC")
-df['Descarte'] = df.iloc[:, 5:ultima_corrida+6].min(axis=1, skipna=True)
+# Passo 5: Calcular o "Descarte"
+# O "Descarte" deve ser a soma das 2 menores pontuações válidas (ignorando "DSC", "EXC" e "NaN")
+
+
+def calcular_descarte(row):
+    # Filtra as pontuações válidas (não considera NaN, DSC, nem EXC)
+    # Droppa qualquer NaN (ou "DSC" ou "EXC")
+    valid_scores = row[6:ultima_corrida+6].dropna()
+
+    # Se houver mais de 1 valor válido, calcula o descarte
+    if len(valid_scores) > 1:
+        # Ordena as pontuações e pega as 2 menores
+        valid_scores_sorted = valid_scores.sort_values()
+        # Descartar as duas menores pontuações
+        # Soma das 2 menores pontuações
+        descarte = valid_scores_sorted.iloc[:2].sum()
+        return descarte
+    else:
+        # Caso o piloto tenha apenas uma corrida válida (não deve acontecer normalmente)
+        return 0
+
+
+# Aplicando a função de descarte
+df['Descarte'] = df.apply(calcular_descarte, axis=1)
+df['Descarte'] = df['Descarte'].round(0).astype(int)
+
+# Passo 6: Substituir NaN por 0 nas pontuações válidas (apenas para a soma)
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
+                                         6:ultima_corrida+6].fillna(0)
+
+# Passo 7: Calcular a "Soma" (somatório das pontuações sem considerar o "Descarte")
+df['Soma'] = df.iloc[:, 6:ultima_corrida+6].sum(axis=1)
+
+# Passo 8: Atualizar a "Soma" após subtrair o "Descarte"
+df['Soma'] = df['Soma'] - df['Descarte']
+df['Soma'] = df['Soma'].round(0).astype(int)
+
+# Para garantir que as pontuações não sejam mais alteradas e "DSC", "EXC" ou "NC" não interfira nos cálculos
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
+                                         6:ultima_corrida+6].astype(int)
 
 
 pontuacao_sprint = {
@@ -613,7 +651,31 @@ with tabs[5]:
 
             # Atualizar a coluna "Posição" com base na nova ordem
             df["Posição"] = range(1, len(df) + 1)
+
+            # Recalcular o Descarte após a atualização das pontuações
+            def recalcular_descarte(row):
+                # Filtra as pontuações válidas (não considera NaN nem "DSC")
+                # Droppa qualquer NaN (ou "DSC" convertido)
+                valid_scores = row[5:ultima_corrida+6].dropna()
+
+                # Se houver mais de 1 valor válido, calcula o descarte
+                if len(valid_scores) > 1:
+                    valid_scores_sorted = valid_scores.sort_values()
+                    # Soma das 2 menores pontuações
+                    descarte = valid_scores_sorted.iloc[:2].sum()
+                    return descarte
+                else:
+                    return 0
+
+            # Aplicando a função de recalcular o descarte
+            df['Descarte'] = df.apply(recalcular_descarte, axis=1)
+
+            # Atualizar a "Soma" após subtrair o "Descarte"
+            df["Soma"] = df["Soma"] - df["Descarte"]
+            df["Soma"] = df["Soma"].round(0).astype(int)
+
             df_filtered = df.iloc[:, :ultima_corrida+7]
+            df_filtered['Descarte'] = df['Descarte']
 
             # Aplicando o estilo no DataFrame
             df_styled = df_filtered.style.apply(colorir_piloto, axis=1)
