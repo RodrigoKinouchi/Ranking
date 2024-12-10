@@ -325,7 +325,7 @@ def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrid
 
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-               'Principal', 'Análise de consistência', 'Manual'])
+               'Principal', 'Análise de consistência', 'Manual', 'Montadora'])
 
 with tabs[0]:
 
@@ -686,3 +686,151 @@ with tabs[5]:
             st.dataframe(df_styled, use_container_width=True)
     else:
         st.warning("A próxima corrida ultrapassa o número máximo de 24 corridas.")
+
+with tabs[6]:
+    def campeonato_por_modelo(df, ultima_corrida):
+        resultado_campeonato = {}
+
+        # Filtra os modelos para considerar apenas "Corolla" e "Cruze"
+        df_filtrado = df[df['Modelo'].isin(['Corolla', 'Cruze'])]
+
+        for modelo in df_filtrado['Modelo'].unique():
+            df_modelo = df_filtrado[df_filtrado['Modelo'] == modelo]
+            pontuacao_total_por_modelo = []
+
+            for corrida in range(1, ultima_corrida + 1):
+                coluna_corrida = str(corrida)
+
+                if coluna_corrida in df_modelo.columns:
+                    df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
+                        by=coluna_corrida, ascending=False)
+
+                    top_2 = df_pontuacao.head(2)
+                    pontuacao_total = top_2[coluna_corrida].apply(
+                        pd.to_numeric, errors='coerce').sum()
+
+                    pontuacao_total_por_modelo.append(pontuacao_total)
+                else:
+                    pontuacao_total_por_modelo.append(0)
+
+            resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
+
+        # Cria o DataFrame
+        df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
+                                     'Modelo', 'Pontuação Atual'])
+
+        # Verifique o conteúdo do DataFrame
+        print("DataFrame Campeonato (após filtro):\n", df_campeonato)
+
+        return df_campeonato
+
+    # Chama a função para calcular o campeonato por modelo e armazena o retorno em df_campeonato
+    df_campeonato = campeonato_por_modelo(df, ultima_corrida)
+
+    # Exibe o DataFrame resultante no Streamlit
+    st.write(df_campeonato)
+
+    def evolucao_pontuacao(df, ultima_corrida):
+        # Inicializa um dicionário para armazenar as pontuações por corrida para cada modelo
+        # A lista 'Modelo' será usada para armazenar os modelos
+        evolucao = {'Modelo': []}
+
+        # Adiciona as colunas das corridas ao dicionário
+        for corrida in range(1, ultima_corrida + 1):
+            evolucao[f'Corrida {corrida}'] = []
+
+        # Filtra o DataFrame para considerar apenas "Corolla" e "Cruze"
+        df_filtrado = df[df['Modelo'].isin(['Corolla', 'Cruze'])]
+
+        # Itera sobre os modelos "Corolla" e "Cruze"
+        for modelo in df_filtrado['Modelo'].unique():
+            df_modelo = df_filtrado[df_filtrado['Modelo'] == modelo]
+
+            # Adiciona o modelo à lista 'Modelo'
+            evolucao['Modelo'].append(modelo)
+
+            # Itera sobre as corridas (de 1 até a última corrida)
+            for corrida in range(1, ultima_corrida + 1):
+                coluna_corrida = str(corrida)
+
+                if coluna_corrida in df_modelo.columns:
+                    # Filtra os pilotos e suas pontuações para a corrida atual
+                    df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
+                        by=coluna_corrida, ascending=False)
+
+                    # Obtém os dois maiores pontuadores dessa corrida
+                    top_2 = df_pontuacao.head(2)
+
+                    # Soma as duas maiores pontuações dessa corrida
+                    pontuacao_total_corrida = top_2[coluna_corrida].apply(
+                        pd.to_numeric, errors='coerce').sum()
+
+                    # Adiciona essa soma ao acumulado da corrida
+                    evolucao[f'Corrida {corrida}'].append(
+                        pontuacao_total_corrida)
+                else:
+                    # Se não houver dados para a corrida, assume pontuação 0
+                    evolucao[f'Corrida {corrida}'].append(0)
+
+        # Converte o dicionário em um DataFrame
+        df_evolucao = pd.DataFrame(evolucao)
+
+        # Calcula a "Soma" total de cada modelo, somando todas as corridas
+        # Soma as corridas (excluindo a coluna 'Modelo')
+        df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
+
+        # Reorganiza as colunas para garantir que "Soma" seja a última coluna
+        df_evolucao = df_evolucao[[
+            'Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
+
+        # Exibe o DataFrame resultante
+        return df_evolucao
+
+    df_evolucao = evolucao_pontuacao(df, ultima_corrida)
+
+    # Exibe o DataFrame de evolução no Streamlit
+    st.write("Evolução das Pontuações ao Longo das Corridas:")
+    st.dataframe(df_evolucao)
+
+    def calcular_pontuacao_acumulada(df_evolucao):
+        # Calcular a pontuação acumulada para cada modelo
+        df_acumulado = df_evolucao.copy()
+        modelos = df_acumulado["Modelo"].unique()
+
+        # Iterar sobre os modelos e calcular a pontuação acumulada para cada um
+        for modelo in modelos:
+            df_modelo = df_acumulado[df_acumulado["Modelo"] == modelo]
+            # Calculando a pontuação acumulada
+            df_modelo.iloc[:, 1:] = df_modelo.iloc[:, 1:].cumsum(axis=1)
+            df_acumulado.loc[df_acumulado["Modelo"] == modelo,
+                             df_modelo.columns[1:]] = df_modelo.iloc[:, 1:]
+
+        return df_acumulado
+
+    def plotar_evolucao_acumulada(df_evolucao):
+        # Calculando a pontuação acumulada
+        df_acumulado = calcular_pontuacao_acumulada(df_evolucao)
+
+        # Excluindo a coluna "Soma" para o gráfico
+        df_acumulado_sem_soma = df_acumulado.drop(columns=["Soma"])
+
+        # Converte o DataFrame de "largura" para "longo" (melt)
+        df_melted = df_acumulado_sem_soma.melt(
+            id_vars=["Modelo"], var_name="Corrida", value_name="Pontuação Acumulada")
+
+        # Cria o gráfico de linha interativo com Plotly
+        fig = px.line(df_melted,
+                      x="Corrida",
+                      y="Pontuação Acumulada",
+                      color="Modelo",
+                      line_group="Modelo",
+                      title="Evolução Acumulada das Pontuações ao Longo das Corridas",
+                      labels={"Pontuação Acumulada": "Pontuação Acumulada",
+                              "Corrida": "Corridas"},
+                      markers=True)
+
+        # Exibe o gráfico no Streamlit
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Exemplo de como você pode chamar a função
+    plotar_evolucao_acumulada(df_evolucao)
