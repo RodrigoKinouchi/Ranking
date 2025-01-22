@@ -325,7 +325,7 @@ def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrid
 
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-               'Principal', 'Análise de consistência', 'Manual', 'Montadora'])
+               'Principal', 'Análise de consistência', 'Manual', 'Montadora', 'Pódios'])
 
 with tabs[0]:
 
@@ -864,3 +864,99 @@ with tabs[6]:
 
     # Exemplo de como você pode chamar a função
     plotar_evolucao_acumulada(df_evolucao)
+
+with tabs[7]:
+    def calcular_podios(df, ultima_corrida):
+        # Dicionário para armazenar os pódios
+        podios = {}
+
+        # Iterar sobre as corridas até a última corrida informada
+        for corrida in range(1, ultima_corrida):
+            # Verifica se a corrida é Sprint ou Principal
+            if corrida % 2 != 0:  # Sprint
+                pontuacao = pontuacao_sprint
+            else:  # Principal
+                pontuacao = pontuacao_principal
+
+            # Obter a coluna da corrida
+            coluna_corrida = df.iloc[:, 5 + corrida]
+
+            # Obter os três primeiros pilotos
+            top_3_indices = coluna_corrida.nlargest(3).index
+
+            for idx in top_3_indices:
+                piloto = df.at[idx, 'Piloto']
+                if piloto not in podios:
+                    podios[piloto] = 0
+                podios[piloto] += 1  # Incrementa o contador de pódios
+
+        # Converter o dicionário em DataFrame
+        df_podios = pd.DataFrame(list(podios.items()),
+                                 columns=['Piloto', 'Pódios'])
+        return df_podios
+
+    # Calcular os pódios
+    df_podios = calcular_podios(df, ultima_corrida)
+
+    # Obter todos os pilotos
+    todos_pilotos = df[['Piloto']].drop_duplicates()
+
+    # Criar DataFrame de pódios com 0 para pilotos sem pódios
+    df_podios = df_podios.merge(
+        todos_pilotos, on='Piloto', how='right').fillna(0)
+
+    # Converter a coluna de pódios para inteiro
+    df_podios['Pódios'] = df_podios['Pódios'].astype(int)
+
+    # Ordenar o DataFrame pela quantidade de pódios em ordem decrescente
+    df_podios = df_podios.sort_values(by='Pódios', ascending=False)
+
+    # Adicionar a coluna de ranking
+    df_podios['Ranking'] = range(1, len(df_podios) + 1)
+
+    # Calcular os 3 primeiros colocados
+    top_3 = df_podios.nsmallest(3, 'Ranking')
+
+    # Criar colunas para o layout do pódio
+    col1, col2, col3 = st.columns(3)
+    image_width = 150
+
+    # Exibir o 1º colocado no centro
+    with col2:
+        primeiro = top_3.iloc[0]
+        st.image(f'images/{primeiro["Piloto"]}.png',
+                 caption=primeiro["Piloto"], width=image_width)
+        st.write(f"**{primeiro['Piloto']}**")
+        st.write(f"Pódios: {primeiro['Pódios']}")
+
+    # Exibir o 2º colocado à esquerda
+    with col1:
+        st.write("")
+        st.write("")
+        st.write("")
+        segundo = top_3.iloc[1]
+        st.image(f'images/{segundo["Piloto"]}.png',
+                 caption=segundo["Piloto"], width=image_width)
+        st.write(f"**{segundo['Piloto']}**")
+        st.write(f"Pódios: {segundo['Pódios']}")
+
+    # Exibir o 3º colocado à direita
+    with col3:
+        st.write("")
+        st.write("")
+        st.write("")
+        terceiro = top_3.iloc[2]
+        st.image(f'images/{terceiro["Piloto"]}.png',
+                 caption=terceiro["Piloto"], width=image_width)
+        st.write(f"**{terceiro['Piloto']}**")
+        st.write(f"Pódios: {terceiro['Pódios']}")
+
+    # Exibir o restante dos pilotos em forma de tabela
+    st.write("### Classificação dos Demais Pilotos")
+    st.dataframe(
+        df_podios.iloc[3:][['Ranking', 'Piloto', 'Pódios']].set_index('Ranking'))
+
+    # Exibir a tabela no Streamlit
+    # st.write("Estatísticas de Pódio")
+    # st.dataframe(df_podios[['Piloto', 'Pódios', 'Ranking']].set_index(
+    # 'Ranking'))
