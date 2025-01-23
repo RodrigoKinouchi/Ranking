@@ -325,7 +325,7 @@ def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrid
 
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-               'Principal', 'Análise de consistência', 'Manual', 'Montadora', 'Pódios'])
+               'Principal', 'Análise de consistência', 'Manual', 'Montadora', 'Pódios', 'Qualifying'])
 
 with tabs[0]:
 
@@ -769,14 +769,16 @@ with tabs[6]:
                                         == 'Corolla'].iloc[0]
             st.image(corolla_row['Logo'], width=200)  # Exibe o logo do Corolla
             # Exibe a pontuação do Corolla
-            st.write(f"**Pontuação:** {corolla_row['Pontuação Atual']} pontos")
+            st.write(
+                f"Pontuação: {corolla_row['Pontuação Atual']} pontos")
 
         with col2:
             # Informações do Cruze
             cruze_row = df_campeonato[df_campeonato['Modelo']
                                       == 'Cruze'].iloc[0]
-            st.image(cruze_row['Logo'], width=200)  # Exibe o logo do Cruze
-            st.write(f"**Pontuação:** {cruze_row['Pontuação Atual']} pontos")
+            st.image(cruze_row['Logo'], width=270)  # Exibe o logo do Cruze
+            st.write(
+                f"Pontuação: {cruze_row['Pontuação Atual']} pontos")
 
     df_campeonato = campeonato_por_modelo(df, ultima_corrida)
 
@@ -1037,3 +1039,96 @@ with tabs[7]:
     # Exibir a tabela de pódios por equipe com estilo
     st.write("### Estatísticas de Pódios por Equipe")
     st.dataframe(styled_df_podios_equipe)
+
+with tabs[8]:
+    def extrair_dados_pdf(arquivo_pdf):
+        """Extrai dados de um PDF e retorna um DataFrame com informações dos pilotos."""
+        dados = []
+        try:
+            with pdfplumber.open(arquivo_pdf) as pdf:
+                # Acessa a primeira página
+                pagina = pdf.pages[0]
+
+                # Extrai o texto da página
+                texto = pagina.extract_text()
+                if not texto:
+                    st.warning(
+                        f"O PDF {arquivo_pdf} está vazio ou não contém texto.")
+                    return None
+
+                # Processa o texto para extrair a tabela
+                linhas = texto.split('\n')
+
+                for linha in linhas:
+                    # Ignora linhas que não têm dados relevantes
+                    if not linha.strip():  # Ignora linhas vazias
+                        continue
+
+                    # Divide a linha em colunas
+                    colunas = linha.split()
+
+                    # Verifica se a primeira coluna é um número (posição)
+                    # Verifica se a primeira coluna é um número
+                    if colunas and colunas[0].isdigit():
+                        # Verifica se há colunas suficientes
+                        if len(colunas) >= 8:  # Precisamos de pelo menos 8 colunas
+                            # Captura a posição, número, nome e equipe
+                            pos = colunas[0]
+                            no = colunas[1]
+                            # Combina todos os nomes do piloto
+                            # Junta todos os nomes do piloto
+                            name = ' '.join(colunas[2:4])
+
+                            # Adiciona os dados à lista
+                            dados.append((pos, no, name))
+
+        except Exception as e:
+            st.error(f'Erro ao ler o arquivo {arquivo_pdf}: {e}')
+            return None
+
+        # Cria um DataFrame a partir dos dados extraídos
+        if dados:
+            # Definindo as colunas que queremos
+            colunas = ['Posição', 'Numeral', 'Piloto']
+            # Cria o DataFrame com as 3 colunas
+            df_qualifying = pd.DataFrame(dados, columns=colunas)
+            return df_qualifying
+        else:
+            st.warning('Nenhuma linha de dados encontrada.')
+            return None
+
+    def carregar_dados_qualifying():
+        """Carrega dados de todas as etapas de qualifying e retorna um dicionário de DataFrames."""
+        dados_qualifying = {}
+        for i in range(1, 13):  # Para as 12 etapas
+            # Ajuste o caminho conforme necessário
+            pdf_path = f'qualifying/Q{i}.pdf'
+            df_qualifying = extrair_dados_pdf(pdf_path)
+            if df_qualifying is not None and not df_qualifying.empty:
+                # Adiciona o DataFrame ao dicionário com a etapa como chave
+                dados_qualifying[f'Etapa {i}'] = df_qualifying
+
+        return dados_qualifying  # Retorna o dicionário de DataFrames
+
+    # Carrega os dados de qualifying
+    dados_qualifying = carregar_dados_qualifying()
+
+    # Cria um selectbox para o usuário escolher a etapa
+    etapas = list(dados_qualifying.keys())
+    etapa_selecionada = st.selectbox("Escolha a etapa de qualifying:", etapas)
+
+    # Exibe os dados da etapa selecionada
+    if etapa_selecionada in dados_qualifying:
+        df_etapa = dados_qualifying[etapa_selecionada]
+
+        # Define a coluna 'Posição' como índice
+        df_etapa.set_index('Posição', inplace=True)
+
+        # Aplica a coloração aos pilotos
+        styled_df = df_etapa.style.apply(colorir_piloto, axis=1)
+
+        st.write(f"Tabela de qualifying para {etapa_selecionada}:")
+        # Exibe o DataFrame estilizado correspondente à etapa selecionada
+        st.dataframe(styled_df)
+    else:
+        st.write("Etapa não encontrada.")
