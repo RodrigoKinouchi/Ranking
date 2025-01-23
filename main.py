@@ -56,7 +56,7 @@ df = df.drop(index=0)
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
-    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=22, step=1)
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=24, step=1)
 
 # Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 até a última corrida informada)
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
@@ -347,6 +347,7 @@ with tabs[0]:
         # Retorna o estilo para cada célula da linha
         return [color] * len(row) if color else [''] * len(row)
 
+    df = df.set_index('Posição')
     # Aplicando o estilo no DataFrame
     df_styled = df.style.apply(colorir_piloto, axis=1)
 
@@ -406,7 +407,7 @@ with tabs[1]:
         return [color] * len(row) if color else [''] * len(row)
 
     # **Remover a coluna de índice** antes de aplicar o estilo
-    df_equipes_sorted = df_equipes_sorted.reset_index(drop=True)
+    df_equipes_sorted = df_equipes_sorted.set_index('Posição')
 
     # Aplicando o estilo no DataFrame de equipes
     df_equipes_styled = df_equipes_sorted.style.apply(colorir_equipe, axis=1)
@@ -482,7 +483,21 @@ with tabs[2]:
         # Exibindo o gráfico de vitórias Sprint
         st.plotly_chart(fig_sprint)
 
-        st.subheader("Evolução dos Pilotos - Corridas Sprint")
+        # Identificar os pilotos com mais vitórias
+        max_vitorias_sprint = max(vitorias_sprint_filtradas.values())
+        pilotos_com_max_vitorias_sprint = [
+            piloto for piloto, vitorias in vitorias_sprint_filtradas.items() if vitorias == max_vitorias_sprint]
+
+        # Exibir as fotos dos pilotos com mais vitórias
+        st.subheader("Pilotos com mais vitórias")
+        num_pilotos_sprint = len(pilotos_com_max_vitorias_sprint)
+        # Criar colunas dinamicamente com base no número de pilotos empatados
+        cols = st.columns(num_pilotos_sprint)
+
+        for i, piloto in enumerate(pilotos_com_max_vitorias_sprint):
+            with cols[i]:
+                st.image(f'images/{piloto}.png', caption=piloto, width=150)
+
         fig_sprint = plotar_grafico_evolucao(
             df, corridas_sprint, corridas_principal, tipo_corrida='Sprint')
         st.plotly_chart(fig_sprint)
@@ -543,6 +558,21 @@ with tabs[3]:
 
         # Exibindo o gráfico de vitórias Principal
         st.plotly_chart(fig_principal)
+
+        # Identificar os pilotos com mais vitórias
+        max_vitorias_principal = max(vitorias_principal_filtradas.values())
+        pilotos_com_max_vitorias_principal = [
+            piloto for piloto, vitorias in vitorias_principal_filtradas.items() if vitorias == max_vitorias_principal]
+
+        # Exibir as fotos dos pilotos com mais vitórias
+        st.subheader("Pilotos com mais vitórias")
+        num_pilotos_principal = len(pilotos_com_max_vitorias_principal)
+        # Criar colunas dinamicamente com base no número de pilotos empatados
+        cols = st.columns(num_pilotos_principal)
+
+        for i, piloto in enumerate(pilotos_com_max_vitorias_principal):
+            with cols[i]:
+                st.image(f'images/{piloto}.png', caption=piloto, width=150)
 
         st.write("## Ranking de Pilotos - Corridas Principal")
 
@@ -952,11 +982,58 @@ with tabs[7]:
         st.write(f"Pódios: {terceiro['Pódios']}")
 
     # Exibir o restante dos pilotos em forma de tabela
-    st.write("### Classificação dos Demais Pilotos")
+    st.write("### Demais Pilotos")
     st.dataframe(
         df_podios.iloc[3:][['Ranking', 'Piloto', 'Pódios']].set_index('Ranking'))
 
-    # Exibir a tabela no Streamlit
-    # st.write("Estatísticas de Pódio")
-    # st.dataframe(df_podios[['Piloto', 'Pódios', 'Ranking']].set_index(
-    # 'Ranking'))
+    def calcular_podios_por_equipe(df, ultima_corrida):
+        # Dicionário para armazenar os pódios por equipe
+        podios_por_equipe = {}
+
+        # Iterar sobre as corridas até a última corrida informada
+        for corrida in range(1, ultima_corrida + 1):
+            # Verifica se a corrida é Sprint ou Principal
+            if corrida % 2 != 0:  # Sprint
+                pontuacao = pontuacao_sprint
+            else:  # Principal
+                pontuacao = pontuacao_principal
+
+            # Obter a coluna da corrida
+            coluna_corrida = df.iloc[:, 5 + corrida]
+
+            # Obter os três primeiros pilotos
+            top_3_indices = coluna_corrida.nlargest(3).index
+
+            for idx in top_3_indices:
+                piloto = df.at[idx, 'Piloto']
+                equipe = df.at[idx, 'Equipe']
+                if equipe not in podios_por_equipe:
+                    podios_por_equipe[equipe] = 0
+                # Incrementa o contador de pódios
+                podios_por_equipe[equipe] += 1
+
+        # Converter o dicionário em DataFrame
+        df_podios_equipe = pd.DataFrame(
+            list(podios_por_equipe.items()), columns=['Equipe', 'Pódios'])
+
+        # Ordenar o DataFrame pela quantidade de pódios em ordem decrescente
+        df_podios_equipe = df_podios_equipe.sort_values(
+            by='Pódios', ascending=False)
+
+        return df_podios_equipe
+
+    # Calcular os pódios por equipe
+    df_podios_equipe = calcular_podios_por_equipe(df, ultima_corrida)
+    # Adicionar a coluna de ranking
+    df_podios_equipe['Ranking'] = range(1, len(df_podios_equipe) + 1)
+
+    # Definir a coluna 'Ranking' como índice
+    df_podios_equipe.set_index('Ranking', inplace=True)
+
+    # Aplicar a função de estilização
+    styled_df_podios_equipe = df_podios_equipe.style.apply(
+        colorir_equipe, axis=1)
+
+    # Exibir a tabela de pódios por equipe com estilo
+    st.write("### Estatísticas de Pódios por Equipe")
+    st.dataframe(styled_df_podios_equipe)
