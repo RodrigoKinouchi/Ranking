@@ -325,7 +325,8 @@ def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrid
 
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-               'Principal', 'Análise de consistência', 'Manual', 'Montadora', 'Pódios', 'Qualifying'])
+               'Principal', 'Análise de consistência', 'Manual', 'Montadora', 'Pódios',
+                'Resultados qualifyings', 'Estatisticas de qualifying', 'Comparação'])
 
 with tabs[0]:
 
@@ -1068,19 +1069,22 @@ with tabs[8]:
                     colunas = linha.split()
 
                     # Verifica se a primeira coluna é um número (posição)
-                    # Verifica se a primeira coluna é um número
                     if colunas and colunas[0].isdigit():
-                        # Verifica se há colunas suficientes
-                        if len(colunas) >= 8:  # Precisamos de pelo menos 8 colunas
+                        try:
                             # Captura a posição, número, nome e equipe
                             pos = colunas[0]
                             no = colunas[1]
+
                             # Combina todos os nomes do piloto
                             # Junta todos os nomes do piloto
                             name = ' '.join(colunas[2:4])
 
                             # Adiciona os dados à lista
                             dados.append((pos, no, name))
+                        except IndexError as e:
+                            print(f"Erro ao processar a linha: '{
+                                  linha}'. Detalhes: {e}")
+                            continue  # Ignora a linha e continua com a próxima
 
         except Exception as e:
             st.error(f'Erro ao ler o arquivo {arquivo_pdf}: {e}')
@@ -1115,7 +1119,8 @@ with tabs[8]:
 
     # Cria um selectbox para o usuário escolher a etapa
     etapas = list(dados_qualifying.keys())
-    etapa_selecionada = st.selectbox("Escolha a etapa de qualifying:", etapas)
+    etapa_selecionada = st.selectbox(
+        "Escolha a etapa para visualizar os dados de classificação:", etapas)
 
     # Exibe os dados da etapa selecionada
     if etapa_selecionada in dados_qualifying:
@@ -1125,10 +1130,248 @@ with tabs[8]:
         df_etapa.set_index('Posição', inplace=True)
 
         # Aplica a coloração aos pilotos
-        styled_df = df_etapa.style.apply(colorir_piloto, axis=1)
+        styled_df_etapa = df_etapa.style.apply(colorir_piloto, axis=1)
 
-        st.write(f"Tabela de qualifying para {etapa_selecionada}:")
+        st.write(f"Resultado classificação {etapa_selecionada}:")
         # Exibe o DataFrame estilizado correspondente à etapa selecionada
-        st.dataframe(styled_df)
+        st.dataframe(styled_df_etapa)
     else:
         st.write("Etapa não encontrada.")
+
+with tabs[9]:
+    def contar_avancos(dados_qualifying):
+        contagem_avanco_q2 = {}
+        contagem_avanco_q3 = {}
+        contagem_zona_inversao = {}
+
+        for etapa, df in dados_qualifying.items():
+            for index, row in df.iterrows():
+                piloto = row['Piloto']
+                posicao = int(row['Posição'])
+
+                if posicao <= 20:  # Avançou para Q2
+                    if piloto not in contagem_avanco_q2:
+                        contagem_avanco_q2[piloto] = 0
+                    contagem_avanco_q2[piloto] += 1
+
+                if posicao <= 8:  # Avançou para Q3
+                    if piloto not in contagem_avanco_q3:
+                        contagem_avanco_q3[piloto] = 0
+                    contagem_avanco_q3[piloto] += 1
+
+                if posicao <= 12:  # Entrou na zona de inversão
+                    if piloto not in contagem_zona_inversao:
+                        contagem_zona_inversao[piloto] = 0
+                    contagem_zona_inversao[piloto] += 1
+
+        return contagem_avanco_q2, contagem_avanco_q3, contagem_zona_inversao
+
+    def calcular_estatisticas(dados_qualifying, piloto_selecionado):
+        posicoes = []
+        for etapa, df in dados_qualifying.items():
+            piloto_data = df[df['Piloto'] == piloto_selecionado]
+            if not piloto_data.empty:
+                posicao = int(piloto_data['Posição'].values[0])
+                posicoes.append(posicao)
+
+        if posicoes:
+            posicao_media = sum(posicoes) / len(posicoes)
+            melhor_posicao = min(posicoes)
+        else:
+            posicao_media = None
+            melhor_posicao = None
+
+        return posicoes, posicao_media, melhor_posicao
+
+    # Carregue seus dados de qualifying
+    dados_qualifying = carregar_dados_qualifying()
+
+    # Contar avanços
+    contagem_q2, contagem_q3, contagem_zona_inversao = contar_avancos(
+        dados_qualifying)
+
+    # Extrai todos os pilotos únicos que participaram da temporada
+    pilotos_unicos = set()
+    for df in dados_qualifying.values():
+        pilotos_unicos.update(df['Piloto'].unique())
+
+    # Cria um selectbox para o usuário escolher um piloto
+    piloto_selecionado = st.selectbox(
+        "Escolha um piloto para visualizar as estatísticas:", list(pilotos_unicos))
+
+    # Calcular estatísticas do piloto selecionado
+    posicoes, posicao_media, melhor_posicao = calcular_estatisticas(
+        dados_qualifying, piloto_selecionado)
+
+    # Gráfico de Performance Qualifying
+    st.markdown("<h2 style='text-align: center;'>Performance de Qualifying</h2>",
+                unsafe_allow_html=True)
+    # Filtra as etapas e posições do piloto selecionado
+    etapas = list(dados_qualifying.keys())
+    posicoes = []
+
+    for etapa in etapas:
+        df_etapa = dados_qualifying[etapa]
+        piloto_data = df_etapa[df_etapa['Piloto'] == piloto_selecionado]
+        if not piloto_data.empty:
+            posicao = int(piloto_data['Posição'].values[0])
+            posicoes.append(posicao)
+        else:
+            # Adiciona None para etapas que o piloto não participou
+            posicoes.append(None)
+
+    # Criando o gráfico interativo com Plotly
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=etapas, y=posicoes, mode='lines+markers',
+                             name=piloto_selecionado, line=dict(color='blue')))
+
+    fig.update_layout(
+        title=f'Posição de Qualifying de {piloto_selecionado} por Etapa',
+        xaxis_title='Etapa',
+        yaxis_title='Posição',
+        template='plotly_white'
+    )
+
+    st.plotly_chart(fig)
+
+    # Painéis de informações
+    st.subheader(f"Estatísticas do Piloto {piloto_selecionado}")
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.metric("Avanços para Q2", contagem_q2.get(piloto_selecionado, 0))
+
+    with col2:
+        st.metric("Avanços para Q3", contagem_q3.get(piloto_selecionado, 0))
+
+    with col3:
+        st.metric("Entradas na Zona de Inversão",
+                  contagem_zona_inversao.get(piloto_selecionado, 0))
+
+    with col4:
+        st.metric("Posição Média de Largada", round(posicao_media, 2)
+                  if posicao_media is not None else "N/A")
+
+    with col5:
+        st.metric("Melhor Posição de Largada",
+                  melhor_posicao if melhor_posicao is not None else "N/A")
+
+    # Adicionando interatividade com um gráfico de barras para a contagem de avanços
+    etapas = list(dados_qualifying.keys())
+    avancos_q2 = [contagem_q2.get(piloto, 0) for piloto in pilotos_unicos]
+    avancos_q3 = [contagem_q3.get(piloto, 0) for piloto in pilotos_unicos]
+    zona_inversao = [contagem_zona_inversao.get(
+        piloto, 0) for piloto in pilotos_unicos]
+
+    # Criando o gráfico de barras interativo com Plotly
+    fig_barras = go.Figure()
+    fig_barras.add_trace(go.Bar(x=list(pilotos_unicos),
+                         y=avancos_q2, name='Avanços para Q2', offsetgroup=1))
+    fig_barras.add_trace(go.Bar(x=list(pilotos_unicos),
+                         y=avancos_q3, name='Avanços para Q3', offsetgroup=2))
+    fig_barras.add_trace(go.Bar(x=list(pilotos_unicos),
+                         y=zona_inversao, name='Zona de Inversão', offsetgroup=3))
+
+    fig_barras.update_layout(
+        title='Contagem de Avanços e Zona de Inversão por Piloto',
+        xaxis_title='Pilotos',
+        yaxis_title='Contagem',
+        barmode='group',
+        xaxis_tickangle=-45,
+        template='plotly_white'
+    )
+
+    st.plotly_chart(fig_barras)
+
+with tabs[10]:
+    st.markdown("<h2 style='text-align: center;'>Comparação qualifying</h2>",
+                unsafe_allow_html=True)
+
+    # Cria um selectbox para o usuário escolher dois pilotos
+    piloto1 = st.selectbox("Escolha o primeiro piloto:", list(pilotos_unicos))
+    piloto2 = st.selectbox("Escolha o segundo piloto:", list(pilotos_unicos))
+
+    # Função para calcular as estatísticas de um piloto
+    def obter_estatisticas_comparacao(dados_qualifying, piloto):
+        posicoes, posicao_media, melhor_posicao = calcular_estatisticas(
+            dados_qualifying, piloto)
+        contagem_q2, contagem_q3, contagem_zona_inversao = contar_avancos(
+            dados_qualifying)
+
+        return {
+            "Melhor Posição": melhor_posicao,
+            "Média de Posição": posicao_media,
+            "Avanços para Q2": contagem_q2.get(piloto, 0),
+            "Avanços para Q3": contagem_q3.get(piloto, 0),
+        }
+
+    # Obtém as estatísticas para os pilotos selecionados
+    estatisticas_piloto1 = obter_estatisticas_comparacao(
+        dados_qualifying, piloto1)
+    estatisticas_piloto2 = obter_estatisticas_comparacao(
+        dados_qualifying, piloto2)
+
+    # Cria um DataFrame para as estatísticas
+    comparacao_df = pd.DataFrame({
+        "Métrica": list(estatisticas_piloto1.keys()),
+        piloto1: list(estatisticas_piloto1.values()),
+        piloto2: list(estatisticas_piloto2.values()),
+    })
+
+    # Gráfico de barras horizontal para comparação
+    fig_comparacao = go.Figure()
+
+    # Adiciona as barras do piloto 1 (crescendo para a esquerda)
+    fig_comparacao.add_trace(go.Bar(
+        y=comparacao_df['Métrica'],
+        # Inverte o sinal para crescer para a esquerda
+        x=-comparacao_df[piloto1],
+        name=piloto1,
+        orientation='h',
+        marker=dict(color='blue')  # Cor para o piloto 1
+    ))
+
+    # Adiciona as barras do piloto 2 (crescendo para a direita)
+    fig_comparacao.add_trace(go.Bar(
+        y=comparacao_df['Métrica'],
+        x=comparacao_df[piloto2],  # Mantém o sinal para crescer para a direita
+        name=piloto2,
+        orientation='h',
+        marker=dict(color='orange')  # Cor para o piloto 2
+    ))
+
+    # Atualiza o layout do gráfico
+    fig_comparacao.update_layout(
+        title='Comparação de Pilotos',
+        title_x=0.45,
+        xaxis_title='Valores',
+        yaxis_title='',
+        xaxis=dict(showgrid=True, zeroline=True,
+                   range=[-30, 30],
+                   # Valores do eixo X
+                   tickvals=[-30, -20, -10, 0, 10, 20, 30],
+                   ticktext=['30', '20', '10', '0', '10',
+                             '20', '30'],  # Rótulos do eixo X
+                   zerolinecolor='black', zerolinewidth=5),
+        yaxis=dict(showgrid=False),
+        barmode='overlay',
+        template='plotly_white'
+    )
+
+    # Exibe as imagens e dados dos pilotos em colunas
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.image(f'images/{piloto1}.png',
+                 caption=piloto1, width=150)
+        for metric, value in estatisticas_piloto1.items():
+            st.metric(metric, value)
+
+    with col2:
+        st.image(f'images/{piloto2}.png',
+                 caption=piloto2, width=150)
+        for metric, value in estatisticas_piloto2.items():
+            st.metric(metric, value)
+
+    # Exibe o gráfico de comparação
+    st.plotly_chart(fig_comparacao)
