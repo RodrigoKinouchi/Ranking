@@ -1300,7 +1300,7 @@ with tabs[10]:
 
         return {
             "Melhor Posição": melhor_posicao,
-            "Média de Posição": posicao_media,
+            "Média de Posição": round(posicao_media,2),
             "Avanços para Q2": contagem_q2.get(piloto, 0),
             "Avanços para Q3": contagem_q3.get(piloto, 0),
         }
