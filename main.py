@@ -5,6 +5,7 @@ import plotly.express as px
 from PIL import Image
 import plotly.graph_objs as go
 import matplotlib.pyplot as plt
+import os
 
 
 # Configurando o título da página URL
@@ -1361,15 +1362,21 @@ with tabs[10]:
     # Exibe as imagens e dados dos pilotos em colunas
     col1, col2 = st.columns(2)
 
+    # Função para exibir a imagem do piloto
+    def exibir_imagem_piloto(piloto):
+        image_path = f'images/{piloto}.png'
+        if os.path.exists(image_path):
+            st.image(image_path, caption=piloto, width=150)
+        else:
+            st.image('images/Pilotodesc.png', caption=piloto, width=150)
+
     with col1:
-        st.image(f'images/{piloto1}.png',
-                 caption=piloto1, width=150)
+        exibir_imagem_piloto(piloto1)
         for metric, value in estatisticas_piloto1.items():
             st.metric(metric, value)
 
     with col2:
-        st.image(f'images/{piloto2}.png',
-                 caption=piloto2, width=150)
+        exibir_imagem_piloto(piloto2)
         for metric, value in estatisticas_piloto2.items():
             st.metric(metric, value)
 
