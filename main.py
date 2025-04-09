@@ -654,6 +654,13 @@ with tabs[4]:
     st.write("#### Quantidade de corridas sem pontuar por Piloto")
     st.dataframe(df[['Piloto', 'Abandonos']])
 
+    # Manipulando o df_abandonos
+    # Criar a coluna "TOTAL"
+    df_abandonos["TOTAL"] = df_abandonos["NC"] + df_abandonos["EXC"] + df_abandonos["DSC"] + df_abandonos["NP"]
+
+    # Criar a coluna "%"
+    df_abandonos["%"] = (df_abandonos["TOTAL"] / ultima_corrida) * 100
+
     st.write("#### Quantidade de corridas sem pontuar por Piloto e Razão")
     st.dataframe(df_abandonos)
 
