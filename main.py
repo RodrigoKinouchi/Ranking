@@ -664,9 +664,13 @@ with tabs[4]:
     df_abandonos["%"] = pd.to_numeric(df_abandonos["%"], errors='coerce')
     # Arredondar a coluna "%" para 2 casas decimais
     df_abandonos["%"] = df_abandonos["%"].round(1)
+    # Formatar a coluna "%" para exibir o símbolo de porcentagem
+    styled_df_abandonos = df_abandonos.style.format({
+        "%": "{:.1f}%"  # Formatar para 1 casa decimal e adicionar o símbolo de porcentagem
+    })
 
     st.write("#### Quantidade de corridas sem pontuar por Piloto e Razão")
-    st.dataframe(df_abandonos)
+    st.dataframe(styled_df_abandonos, hide_index=True)
 
     # Média de Pontuação por Corrida (Ordenada)
     df['Média por Corrida'] = df['Soma'] / ultima_corrida
@@ -1357,7 +1361,7 @@ with tabs[9]:
     })
         
     st.markdown("<h2 style='text-align: center;'>Estatísticas dos Pilotos</h2>", unsafe_allow_html=True)
-    st.dataframe(styled_df_estatisticas)
+    st.dataframe(styled_df_estatisticas, hide_index=True)
 
 with tabs[10]:
     st.markdown("<h2 style='text-align: center;'>Comparação qualifying</h2>",
