@@ -660,6 +660,10 @@ with tabs[4]:
 
     # Criar a coluna "%"
     df_abandonos["%"] = (df_abandonos["TOTAL"] / ultima_corrida) * 100
+    # Garantir que a coluna "%" seja numérica antes de arredondar
+    df_abandonos["%"] = pd.to_numeric(df_abandonos["%"], errors='coerce')
+    # Arredondar a coluna "%" para 2 casas decimais
+    df_abandonos["%"] = df_abandonos["%"].round(1)
 
     st.write("#### Quantidade de corridas sem pontuar por Piloto e Razão")
     st.dataframe(df_abandonos)
