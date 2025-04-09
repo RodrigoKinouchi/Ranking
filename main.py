@@ -1332,6 +1332,33 @@ with tabs[9]:
 
     st.plotly_chart(fig_barras)
 
+    # Criar um DataFrame para armazenar as estatísticas dos pilotos
+    estatisticas_pilotos = []
+
+    for piloto in pilotos_unicos:
+        estatisticas_piloto = {
+            "Piloto": piloto,
+            "Avanços para Q2": contagem_q2.get(piloto, 0),
+            "Avanços para Q3": contagem_q3.get(piloto, 0),
+            "Entradas na Zona de Inversão": contagem_zona_inversao.get(piloto, 0),
+            "Posição Média de Largada": round(calcular_estatisticas(dados_qualifying, piloto)[1], 2) if calcular_estatisticas(dados_qualifying, piloto)[1] is not None else "N/A"
+        }
+        estatisticas_pilotos.append(estatisticas_piloto)
+
+    # Criar um DataFrame a partir da lista de dicionários
+    df_estatisticas = pd.DataFrame(estatisticas_pilotos)
+
+    # Aplicar a coloração ao DataFrame
+    styled_df_estatisticas = df_estatisticas.style.apply(colorir_piloto, axis=1)
+
+    # Formatar a coluna "Posição Média de Largada" para exibição
+    styled_df_estatisticas = styled_df_estatisticas.format({
+        "Posição Média de Largada": "{:.2f}"  # Formatar para duas casas decimais
+    })
+        
+    st.markdown("<h2 style='text-align: center;'>Estatísticas dos Pilotos</h2>", unsafe_allow_html=True)
+    st.dataframe(styled_df_estatisticas)
+
 with tabs[10]:
     st.markdown("<h2 style='text-align: center;'>Comparação qualifying</h2>",
                 unsafe_allow_html=True)
