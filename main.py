@@ -59,6 +59,41 @@ df = df.drop(index=0)
 ultima_corrida = st.number_input(
     "Informe o número da última corrida realizada", min_value=1, max_value=24, value=24, step=1)
 
+# Criar o DataFrame df_abandonos para contabilizar os motivos de abandonos e mostrar na tab analise de consistencia
+df_abandonos = pd.DataFrame(columns=["Piloto", "NC", "EXC", "DSC", "NP"])
+
+# Loop pelas linhas do DataFrame para contar as razões
+for _, row in df.iterrows():
+    piloto = row['Piloto']
+    
+    # Inicializa contadores
+    nc_count = 0
+    exc_count = 0
+    dsc_count = 0
+    np_count = 0
+    
+    # Verifica as colunas de pontuação
+    for score in row[6:ultima_corrida + 6]:
+        if score == "NC":
+            nc_count += 1
+        elif score == "EXC":
+            exc_count += 1
+        elif score == "DSC":
+            dsc_count += 1
+        elif pd.isna(score) or score == "":  # Considera NaN ou string vazia como não participação
+            np_count += 1
+    
+    # Adiciona os resultados ao DataFrame df_abandonos usando pd.concat
+    new_row = pd.DataFrame({
+        "Piloto": [piloto],
+        "NC": [nc_count],
+        "EXC": [exc_count],
+        "DSC": [dsc_count],
+        "NP": [np_count]
+    })
+    
+    df_abandonos = pd.concat([df_abandonos, new_row], ignore_index=True)
+
 # Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 até a última corrida informada)
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
                                          6:ultima_corrida+6].replace("NC", 0)
@@ -603,7 +638,6 @@ with tabs[3]:
         st.plotly_chart(fig_principal_equipes)
 
 with tabs[4]:
-    st.write("### Análise de Consistência")
     # Contar o número total de corridas (colunas de pontuação)
     # Assumindo que as colunas de pontuação começam na posição 5 até a penúltima
     df = df.drop(columns=['Descarte'])
@@ -617,8 +651,11 @@ with tabs[4]:
     df['Abandonos'] = total_corridas - df['Corridas Participadas']
 
     # Exibir número de abandonos por piloto
-    st.write("#### Número de Abandonos por Piloto")
+    st.write("#### Quantidade de corridas sem pontuar por Piloto")
     st.dataframe(df[['Piloto', 'Abandonos']])
+
+    st.write("#### Quantidade de corridas sem pontuar por Piloto e Razão")
+    st.dataframe(df_abandonos)
 
     # Média de Pontuação por Corrida (Ordenada)
     df['Média por Corrida'] = df['Soma'] / ultima_corrida
