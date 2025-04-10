@@ -680,7 +680,7 @@ with tabs[4]:
 
     # Exibir número de abandonos por piloto
     st.write("#### Quantidade de corridas sem pontuar por Piloto")
-    st.dataframe(df[['Piloto', 'Abandonos']])
+    #st.dataframe(df[['Piloto', 'Abandonos']])
 
     # Manipulando o df_abandonos
     # Criar a coluna "TOTAL"
@@ -692,9 +692,12 @@ with tabs[4]:
     df_abandonos["%"] = pd.to_numeric(df_abandonos["%"], errors='coerce')
     # Arredondar a coluna "%" para 2 casas decimais
     df_abandonos["%"] = df_abandonos["%"].round(1)
-    # Formatar a coluna "%" para exibir o símbolo de porcentagem
-    styled_df_abandonos = df_abandonos.style.format({
-        "%": "{:.1f}%"  # Formatar para 1 casa decimal e adicionar o símbolo de porcentagem
+    # Calcular a coluna "Eficiência" como 100 - %
+    df_abandonos["Eficiência"] = 100 - df_abandonos["%"]
+    df_abandonos.drop(columns=["%"], inplace=True)
+    # Aplicar a coloração ao DataFrame df_abandonos
+    styled_df_abandonos = df_abandonos.style.apply(colorir_piloto, axis=1).format({
+    "Eficiência": "{:.1f}%"  # Formatar para 1 casa decimal e adicionar o símbolo de porcentagem
     })
 
     st.write("#### Quantidade de corridas sem pontuar por Piloto e Razão")
