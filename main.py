@@ -679,7 +679,7 @@ with tabs[4]:
     df['Abandonos'] = total_corridas - df['Corridas Participadas']
 
     # Exibir número de abandonos por piloto
-    st.write("#### Quantidade de corridas sem pontuar por Piloto")
+    #st.write("#### Quantidade de corridas sem pontuar por Piloto")
     #st.dataframe(df[['Piloto', 'Abandonos']])
 
     # Manipulando o df_abandonos
@@ -700,7 +700,7 @@ with tabs[4]:
     "Eficiência": "{:.1f}%"  # Formatar para 1 casa decimal e adicionar o símbolo de porcentagem
     })
 
-    st.write("#### Quantidade de corridas sem pontuar por Piloto e Razão")
+    st.write("#### Confiabilidade")
     st.dataframe(styled_df_abandonos, hide_index=True)
 
     # Média de Pontuação por Corrida (Ordenada)
