@@ -1497,31 +1497,37 @@ with tabs[10]:
     with tabs[11]:
         st.header("Recorte de etapas")
 
-        # Opção para selecionar um intervalo de etapas
-        intervalo = st.slider("Selecione um intervalo de etapas (caso não queira usar o slider, deixe fixo em 0)", 0, 24, (5, 15))
+        # Cria um formulário para agrupar os widgets
+        with st.form(key='form_recorte'):
+            # Opção para selecionar um intervalo de etapas
+            intervalo = st.slider("Selecione um intervalo de etapas (caso não queira usar o slider, deixe fixo em 0)", 0, 24, (5, 15))
 
-        # Opção para selecionar etapas específicas
-        etapas_opcoes = [str(i) for i in range(1, 25)]  # Etapas de "1" a "24"
-        etapas_selecionadas = st.multiselect("Selecione etapas específicas", etapas_opcoes)
+            # Opção para selecionar etapas específicas
+            etapas_opcoes = [str(i) for i in range(1, 25)]  # Etapas de "1" a "24"
+            etapas_selecionadas = st.multiselect("Selecione etapas específicas", etapas_opcoes)
 
-        # Combina as seleções
-        if intervalo[0] == 0 and intervalo[1] == 0:
-            # Se o intervalo for 0, apenas use as etapas selecionadas
-            etapas_final = set(etapas_selecionadas)
-        else:
-            # Caso contrário, combine o intervalo com as etapas selecionadas
-            etapas_final = set(etapas_opcoes[intervalo[0]-1:intervalo[1]]) | set(etapas_selecionadas)
+            # Botão para aplicar o filtro
+            submit_button = st.form_submit_button("Aplicar Filtro")
 
-        # Filtra o DataFrame
-        def filter_dataframe(df, etapas_selecionadas):
-            # Mantém a ordem das colunas
-            colunas_filtradas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma'] + \
-                                [etapa for etapa in novas_colunas[5:30] if etapa in etapas_selecionadas] + \
-                                ['Descarte']
-            return df[colunas_filtradas]
+        if submit_button:
+            # Combina as seleções
+            if intervalo[0] == 0 and intervalo[1] == 0:
+                # Se o intervalo for 0, apenas use as etapas selecionadas
+                etapas_final = set(etapas_selecionadas)
+            else:
+                # Caso contrário, combine o intervalo com as etapas selecionadas
+                etapas_final = set(etapas_opcoes[intervalo[0]-1:intervalo[1]]) | set(etapas_selecionadas)
 
-        if st.button ("Aplicar Filtro"):
+            # Filtra o DataFrame
+            def filter_dataframe(df, etapas_selecionadas):
+                # Mantém a ordem das colunas
+                colunas_filtradas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma'] + \
+                                    [etapa for etapa in novas_colunas[5:30] if etapa in etapas_selecionadas] + \
+                                    ['Descarte']
+                return df[colunas_filtradas]
+
             df_recorte = filter_dataframe(df_cortez, etapas_final)
+            
             # Calcula a soma das pontuações das etapas filtradas
             df_recorte['Soma'] = df_recorte[[etapa for etapa in etapas_final if etapa in df_cortez.columns]].sum(axis=1)
 
