@@ -397,27 +397,52 @@ with tabs[0]:
 
 with tabs[1]:
     # Passo 6: Agrupar por equipe e somar as pontuações
-    colunas_pontuacao = df.columns[6:30].tolist()
+    colunas_pontuacao = df.columns[5:29].tolist()
 
     # Verificar se todas as colunas de pontuação são numéricas antes de realizar a soma
     df[colunas_pontuacao] = df[colunas_pontuacao].apply(
         pd.to_numeric, errors='coerce')
 
     # Agrupar por equipe e somar as pontuações de cada corrida
-    df_equipes = df.groupby('Equipe')[colunas_pontuacao].sum()
+    df_equipes = df.groupby('Equipe')[colunas_pontuacao].sum().reset_index()
 
-    # Criar a coluna "Soma" com a soma das pontuações de cada equipe
-    df_equipes['Soma'] = df_equipes[colunas_pontuacao].sum(axis=1)
+    # Dicionário com os valores de descarte para cada equipe
+    descarte_values = {
+        "TMG Racing": 50,
+        "RCM Motorsport": 59,
+        "A Mattheis Vogel": 28,
+        "Mobil Ale": 15,
+        "Eurofarma-RC": 12,
+        "Crown Racing": 45,
+        "Pole Motorsport": 20,
+        "Ipiranga Racing": 22,
+        "Cavaleiro Sports": 33,
+        "Blau Motorsport": 25,
+        "Full Time Sports": 38,
+        "KTF Racing": 20,
+        "KTF Sports": 0,
+        "Woking Garra Racing": 0,
+        ".":0
+    }
+
+    # Adiciona a coluna "Descarte" ao DataFrame df_equipes
+    df_equipes['Descarte'] = df_equipes['Equipe'].map(descarte_values)
+
+    # Criar a coluna "Soma" com a soma das pontuações de cada equipe, subtraindo o "Descarte"
+    df_equipes['Soma'] = df_equipes[colunas_pontuacao].sum(axis=1) - df_equipes['Descarte']
 
     # Resetar o índice para trazer 'Equipe' de volta como uma coluna normal
-    df_equipes_sorted = df_equipes.reset_index()
+    df_equipes_sorted = df_equipes.reset_index(drop=True)
 
     # Ordenar a tabela pela pontuação total em ordem decrescente
     df_equipes_sorted = df_equipes_sorted.sort_values(
         by='Soma', ascending=False)
 
     # Remover as casas decimais da coluna "Soma"
+    df_equipes_sorted['Soma'] = df_equipes_sorted['Soma'].fillna(0)
     df_equipes_sorted['Soma'] = df_equipes_sorted['Soma'].round(0).astype(int)
+    df_equipes_sorted['Descarte'] = df_equipes_sorted['Descarte'].round(0)
+
 
     # Adicionar a coluna "Posição" com base na ordenação da coluna "Soma"
     df_equipes_sorted['Posição'] = df_equipes_sorted['Soma'].rank(
@@ -427,6 +452,7 @@ with tabs[1]:
     colunas = ['Posição'] + \
         [col for col in df_equipes_sorted.columns if col != 'Posição']
     df_equipes_sorted = df_equipes_sorted[colunas]
+
 
     # Função para aplicar estilos ao DataFrame (com base nas equipes)
     def colorir_equipe(row):
@@ -445,7 +471,7 @@ with tabs[1]:
 
     # **Remover a coluna de índice** antes de aplicar o estilo
     df_equipes_sorted = df_equipes_sorted.set_index('Posição')
-
+    
     # Aplicando o estilo no DataFrame de equipes
     df_equipes_styled = df_equipes_sorted.style.apply(colorir_equipe, axis=1)
 
