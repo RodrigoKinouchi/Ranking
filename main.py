@@ -61,6 +61,7 @@ ultima_corrida = st.number_input(
 
 # Criar o DataFrame df_abandonos para contabilizar os motivos de abandonos e mostrar na tab analise de consistencia
 df_abandonos = pd.DataFrame(columns=["Piloto", "NC", "EXC", "DSC", "NP"])
+abandonos_data = []
 
 # Loop pelas linhas do DataFrame para contar as razões
 for _, row in df.iterrows():
@@ -80,19 +81,20 @@ for _, row in df.iterrows():
             exc_count += 1
         elif score == "DSC":
             dsc_count += 1
-        elif pd.isna(score) or score == "":  # Considera NaN ou string vazia como não participação
+        elif pd.isna(score) or score == "" or score == "NP":  # Considera NaN ou string vazia como não participação
             np_count += 1
     
-    # Adiciona os resultados ao DataFrame df_abandonos usando pd.concat
-    new_row = pd.DataFrame({
-        "Piloto": [piloto],
-        "NC": [nc_count],
-        "EXC": [exc_count],
-        "DSC": [dsc_count],
-        "NP": [np_count]
+    # Adiciona os resultados à lista
+    abandonos_data.append({
+        "Piloto": piloto,
+        "NC": nc_count,
+        "EXC": exc_count,
+        "DSC": dsc_count,
+        "NP": np_count
     })
-    
-    df_abandonos = pd.concat([df_abandonos, new_row], ignore_index=True)
+
+# Cria um DataFrame a partir da lista de resultados
+df_abandonos = pd.DataFrame(abandonos_data)
 
 # Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 até a última corrida informada)
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
@@ -581,7 +583,7 @@ with tabs[2]:
         colorir_piloto, axis=1)
 
     # Exibir a tabela do ranking Sprint
-    st.dataframe(df_ranking_sprint_styled)
+    st.dataframe(df_ranking_sprint_styled, hide_index=True)
 
     # Exibe o gráfico de vitórias Sprint
     st.subheader("Vitórias nas Corridas Sprint")
@@ -652,7 +654,7 @@ with tabs[3]:
             colorir_piloto, axis=1)
 
         # Exibir a tabela do ranking Principal
-        st.dataframe(df_ranking_principal_styled)
+        st.dataframe(df_ranking_principal_styled, hide_index=True)
 
         st.subheader("Evolução dos Pilotos - Corridas Principal")
         fig_principal = plotar_grafico_evolucao(
@@ -925,7 +927,7 @@ with tabs[6]:
 
     # Exibe o DataFrame de evolução no Streamlit
     st.write("Evolução das Pontuações ao Longo das Corridas:")
-    st.dataframe(df_evolucao)
+    st.dataframe(df_evolucao,hide_index=True)
 
     def calcular_pontuacao_acumulada(df_evolucao):
         # Calcular a pontuação acumulada para cada modelo
