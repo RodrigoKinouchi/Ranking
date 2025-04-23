@@ -173,7 +173,7 @@ pontuacao_principal = {
 corridas_sprint = [col for idx, col in enumerate(
     df.columns[6:29]) if (idx + 1) % 2 != 0]  # Ímpares
 corridas_principal = [col for idx, col in enumerate(
-    df.columns[6:29]) if (idx + 1) % 2 == 0]  # Pares
+    df.columns[6:30]) if (idx + 1) % 2 == 0]  # Pares
 
 # Função para calcular a soma das pontuações por tipo de corrida (Sprint ou Principal)
 
@@ -208,7 +208,7 @@ corridas_sprint = [col for idx, col in enumerate(
     df.columns[6:29]) if (idx + 1) % 2 != 0]
 # Corridas Principal (pares)
 corridas_principal = [col for idx, col in enumerate(
-    df.columns[6:29]) if (idx + 1) % 2 == 0]
+    df.columns[6:30]) if (idx + 1) % 2 == 0]
 
 # Passo 1: Contar vitórias em cada tipo de corrida (Sprint e Principal)
 vitorias_sprint = {}
