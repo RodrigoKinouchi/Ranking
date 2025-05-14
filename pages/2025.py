@@ -26,7 +26,7 @@ st.write("")
 
 
 # Abre o PDF
-with pdfplumber.open("tabela.pdf") as pdf:
+with pdfplumber.open("tabela2025.pdf") as pdf:
     # Acessa a primeira página
     pagina = pdf.pages[0]
 
@@ -42,22 +42,22 @@ with pdfplumber.open("tabela.pdf") as pdf:
 
 novo_cabecalho = ["Posição", "Numeral", "Piloto", "Equipe", "Modelo",
                   "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                  "16", "17", "18", "19", "20", "21", "22", "Descarte", "23", "24", "Soma"
+                  "16", "17", "18", "19", "20", "21", "Descarte", "22", "23", "Soma"
                   ]
 df.columns = novo_cabecalho
 
 # Cria uma lista com as colunas do DataFrame, colocando "Soma" na posição desejada
 novas_colunas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                 "16", "17", "18", "19", "20", "21", "22", "23", "24", "Descarte"] + \
+                 "16", "17", "18", "19", "20", "21", "22", "23", "Descarte"] + \
     [col for col in df.columns if col not in ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                                              "16", "17", "18", "19", "20", "21", "22", "23", "24", "Descarte"]]
+                                              "16", "17", "18", "19", "20", "21", "22", "23", "Descarte"]]
 
 df = df[novas_colunas]
 df = df.drop(index=0)
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
-    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=24, step=1)
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=1, step=1)
 
 # Criar o DataFrame df_abandonos para contabilizar os motivos de abandonos e mostrar na tab analise de consistencia
 df_abandonos = pd.DataFrame(columns=["Piloto", "NC", "EXC", "DSC", "NP"])
@@ -205,10 +205,10 @@ def calcular_ranking(tipo_corrida, colunas_corridas):
 
 # Corridas Sprint (ímpares)
 corridas_sprint = [col for idx, col in enumerate(
-    df.columns[6:29]) if (idx + 1) % 2 != 0]
+    df.columns[6:28]) if (idx + 1) % 2 != 0]
 # Corridas Principal (pares)
 corridas_principal = [col for idx, col in enumerate(
-    df.columns[6:30]) if (idx + 1) % 2 == 0]
+    df.columns[6:29]) if (idx + 1) % 2 == 0]
 
 # Passo 1: Contar vitórias em cada tipo de corrida (Sprint e Principal)
 vitorias_sprint = {}
@@ -376,9 +376,7 @@ with tabs[0]:
             'Gabriel Casagrande': 'background-color: purple; color: white;',
             'Lucas Foresti': 'background-color: gray; color: white;',
             'Cesar Ramos': 'background-color: yellow; color: black;',
-            'Thiago Camilo': 'background-color: red; color: white;',
-            'Allam Khodair': 'background-color: green; color: white;',
-            'Felipe Fraga': 'background-color: blue; color: white;',
+            'Thiago Camilo': 'background-color: red; color: white;'
         }
 
         # Aplica a cor se o nome do piloto corresponder
@@ -402,90 +400,60 @@ with tabs[1]:
     # Passo 6: Agrupar por equipe e somar as pontuações
     colunas_pontuacao = df.columns[5:29].tolist()
 
-    # Verificar se todas as colunas de pontuação são numéricas antes de realizar a soma
-    df[colunas_pontuacao] = df[colunas_pontuacao].apply(
-        pd.to_numeric, errors='coerce')
+    # Garantir que as colunas sejam numéricas
+    df[colunas_pontuacao] = df[colunas_pontuacao].apply(pd.to_numeric, errors='coerce')
 
-    # Agrupar por equipe e somar as pontuações de cada corrida
+    # Agrupar por equipe e somar as pontuações
     df_equipes = df.groupby('Equipe')[colunas_pontuacao].sum().reset_index()
 
-    # Dicionário com os valores de descarte para cada equipe
-    descarte_values = {
-        "TMG Racing": 50,
-        "RCM Motorsport": 59,
-        "A Mattheis Vogel": 28,
-        "Mobil Ale": 15,
-        "Eurofarma-RC": 12,
-        "Crown Racing": 45,
-        "Pole Motorsport": 20,
-        "Ipiranga Racing": 22,
-        "Cavaleiro Sports": 33,
-        "Blau Motorsport": 25,
-        "Full Time Sports": 38,
-        "KTF Racing": 20,
-        "KTF Sports": 0,
-        "Woking Garra Racing": 0,
-        ".":0
-    }
+    # Criar a coluna "Soma" com a soma das pontuações de cada equipe
+    df_equipes['Soma'] = df_equipes[colunas_pontuacao].sum(axis=1)
 
-    # Adiciona a coluna "Descarte" ao DataFrame df_equipes
-    df_equipes['Descarte'] = df_equipes['Equipe'].map(descarte_values)
+    # Ordenar pela soma
+    df_equipes_sorted = df_equipes.sort_values(by='Soma', ascending=False).reset_index(drop=True)
 
-    # Criar a coluna "Soma" com a soma das pontuações de cada equipe, subtraindo o "Descarte"
-    df_equipes['Soma'] = df_equipes[colunas_pontuacao].sum(axis=1) - df_equipes['Descarte']
-
-    # Resetar o índice para trazer 'Equipe' de volta como uma coluna normal
-    df_equipes_sorted = df_equipes.reset_index(drop=True)
-
-    # Ordenar a tabela pela pontuação total em ordem decrescente
-    df_equipes_sorted = df_equipes_sorted.sort_values(
-        by='Soma', ascending=False)
-
-    # Remover as casas decimais da coluna "Soma"
-    df_equipes_sorted['Soma'] = df_equipes_sorted['Soma'].fillna(0)
+    # Arredondar e converter
     df_equipes_sorted['Soma'] = df_equipes_sorted['Soma'].round(0).astype(int)
-    df_equipes_sorted['Descarte'] = df_equipes_sorted['Descarte'].round(0)
+    df_equipes_sorted['Descarte'] = df_equipes_sorted['Descarte'].round(0).astype(int)
 
+    # Adicionar a coluna de posição
+    df_equipes_sorted['Posição'] = df_equipes_sorted['Soma'].rank(ascending=False, method='min').astype(int)
 
-    # Adicionar a coluna "Posição" com base na ordenação da coluna "Soma"
-    df_equipes_sorted['Posição'] = df_equipes_sorted['Soma'].rank(
-        ascending=False, method='min').astype(int)
-
-    # Reordenar as colunas para que "Posição" seja a primeira
-    colunas = ['Posição'] + \
-        [col for col in df_equipes_sorted.columns if col != 'Posição']
+    # Reordenar as colunas
+    colunas = ['Posição'] + [col for col in df_equipes_sorted.columns if col != 'Posição']
     df_equipes_sorted = df_equipes_sorted[colunas]
 
+    # Garantir índice único para estilização
+    df_equipes_sorted = df_equipes_sorted.reset_index(drop=True)
 
-    # Função para aplicar estilos ao DataFrame (com base nas equipes)
+    # Arredondar e converter todas as colunas numéricas (exceto 'Equipe') para int
+    colunas_numericas = df_equipes_sorted.columns.difference(['Equipe'])
+
+    df_equipes_sorted[colunas_numericas] = df_equipes_sorted[colunas_numericas].fillna(0).round(0).astype(int)
+
+    # Função de estilo
     def colorir_equipe(row):
-        # Dicionário de cores para as equipes
         color_map_equipes = {
-            'Ipiranga Racing': 'background-color: yellow; color: black;',
-            'A Mattheis Vogel': 'background-color: orange; color: black;',
-            'Blau Motorsport': 'background-color: blue; color: white;',
+            'IPIRANGA RACING': 'background-color: yellow; color: black;',
+            'AMATTHEIS VOGEL': 'background-color: orange; color: black;',
         }
-
-        # Aplica a cor se o nome da equipe corresponder
-        color = color_map_equipes.get(row['Equipe'], '')
-
-        # Retorna o estilo para cada célula da linha
+        equipe = row['Equipe'].strip().upper()
+        color = color_map_equipes.get(equipe, '')
         return [color] * len(row) if color else [''] * len(row)
 
-    # **Remover a coluna de índice** antes de aplicar o estilo
-    df_equipes_sorted = df_equipes_sorted.set_index('Posição')
-    
-    # Aplicando o estilo no DataFrame de equipes
+    # Aplicar o estilo no DataFrame final correto
     df_equipes_styled = df_equipes_sorted.style.apply(colorir_equipe, axis=1)
 
-    # Exibir a tabela com pontuação por equipe, sem o índice
+
+    # Exibir
     st.write("### Tabela de Pontuação por Equipe")
     st.dataframe(df_equipes_styled.hide(
         axis="index"), use_container_width=True)
 
-    # Exibe o gráfico de vitórias totais
+    # Gráfico de vitórias
     st.subheader("Vitórias Totais por Equipe")
     st.plotly_chart(fig_total_equipes)
+
 
 with tabs[2]:
     # Criar gráfico de pizza para vitórias gerais
