@@ -54,17 +54,22 @@ novas_colunas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "
 
 df = df[novas_colunas]
 df = df.drop(index=0)
+df["Piloto"] = df["Piloto"].str.title()
+df["Equipe"] = df["Equipe"].str.title()
+
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
     "Informe o número da última corrida realizada", min_value=1, max_value=24, value=1, step=1)
 
-# Criar o DataFrame df_abandonos para contabilizar os motivos de abandonos e mostrar na tab analise de consistencia
+# Substitui "." (etapas futuras) por NaN
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace(".", pd.NA)
+
+# Criar o DataFrame para contabilizar os motivos de abandono
 df_abandonos = pd.DataFrame(columns=["Piloto", "NC", "EXC", "DSC", "NP"])
 abandonos_data = []
 df_cortez = df
 
-# Loop pelas linhas do DataFrame para contar as razões
 for _, row in df.iterrows():
     piloto = row['Piloto']
     
@@ -73,19 +78,17 @@ for _, row in df.iterrows():
     exc_count = 0
     dsc_count = 0
     np_count = 0
-    
-    # Verifica as colunas de pontuação
-    for score in row[6:ultima_corrida + 6]:
+
+    for score in row[6:ultima_corrida+6]:
         if score == "NC":
             nc_count += 1
         elif score == "EXC":
             exc_count += 1
         elif score == "DSC":
             dsc_count += 1
-        elif pd.isna(score) or score == "" or score == "NP":  # Considera NaN ou string vazia como não participação
+        elif pd.isna(score) or score in ["", "NP", "."]:
             np_count += 1
-    
-    # Adiciona os resultados à lista
+
     abandonos_data.append({
         "Piloto": piloto,
         "NC": nc_count,
@@ -94,66 +97,67 @@ for _, row in df.iterrows():
         "NP": np_count
     })
 
-# Cria um DataFrame a partir da lista de resultados
 df_abandonos = pd.DataFrame(abandonos_data)
 
-# Passo 1: Substituir "NC" por 0 nas colunas de pontuação (corridas 1 até a última corrida informada)
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
-                                         6:ultima_corrida+6].replace("NC", 0)
+# Substituições para facilitar os cálculos
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace({
+    "NC": 0,         # NC conta como zero ponto
+    "DSC": pd.NA,    # DSC desconsidera da pontuação
+    "EXC": pd.NA     # EXC também
+})
 
-# Passo 2: Substituir "DSC" por NaN para que essas corridas não sejam consideradas no cálculo do descarte
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
-                                         6:ultima_corrida+6].replace("DSC", pd.NA)
+# Converte os valores para numérico (forçando NaN onde necessário)
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].apply(
+    pd.to_numeric, errors='coerce'
+)
 
-# Passo 3: Substituir "EXC" por NaN para que essa corrida não seja considerada para descarte e soma
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
-                                         6:ultima_corrida+6].replace("EXC", pd.NA)
-
-# Passo 4: Converter as colunas de pontuação para numérico, forçando erros para NaN
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
-                                         6:ultima_corrida+6].apply(pd.to_numeric, errors='coerce')
-
-# Passo 5: Calcular o "Descarte"
-# O "Descarte" deve ser a soma das 2 menores pontuações válidas (ignorando "DSC", "EXC" e "NaN")
-
-
+# Calcula o descarte das duas menores pontuações válidas
 def calcular_descarte(row):
-    # Filtra as pontuações válidas (não considera NaN, DSC, nem EXC)
-    # Droppa qualquer NaN (ou "DSC" ou "EXC")
-    valid_scores = row[6:ultima_corrida+6].dropna()
+    pontuacoes_validas = row[6:ultima_corrida+6].dropna()
+    if len(pontuacoes_validas) > 1:
+        return pontuacoes_validas.nsmallest(2).sum()
+    return 0
 
-    # Se houver mais de 1 valor válido, calcula o descarte
-    if len(valid_scores) > 1:
-        # Ordena as pontuações e pega as 2 menores
-        valid_scores_sorted = valid_scores.sort_values()
-        # Descartar as duas menores pontuações
-        # Soma das 2 menores pontuações
-        descarte = valid_scores_sorted.iloc[:2].sum()
-        return descarte
-    else:
-        # Caso o piloto tenha apenas uma corrida válida (não deve acontecer normalmente)
-        return 0
+df['Descarte'] = df.apply(calcular_descarte, axis=1).round(0).astype(int)
+
+# Substitui NaN restantes por 0 para soma
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].fillna(0)
+
+# Soma de todas as pontuações
+df['Soma'] = df.iloc[:, 6:ultima_corrida+6].sum(axis=1).round(0).astype(int)
+
+# Subtrai o descarte da soma total
+df['Soma'] = (df['Soma'] - df['Descarte']).round(0).astype(int)
+
+# Garante que o tipo é numérico inteiro (evita erros em plotagens e análises futuras)
+df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].astype(int)
 
 
-# Aplicando a função de descarte
-df['Descarte'] = df.apply(calcular_descarte, axis=1)
-df['Descarte'] = df['Descarte'].round(0).astype(int)
-
-# Passo 6: Substituir NaN por 0 nas pontuações válidas (apenas para a soma)
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
-                                         6:ultima_corrida+6].fillna(0)
-
-# Passo 7: Calcular a "Soma" (somatório das pontuações sem considerar o "Descarte")
-df['Soma'] = df.iloc[:, 6:ultima_corrida+6].sum(axis=1)
-
-# Passo 8: Atualizar a "Soma" após subtrair o "Descarte"
-df['Soma'] = df['Soma'] - df['Descarte']
-df['Soma'] = df['Soma'].round(0).astype(int)
-
-# Para garantir que as pontuações não sejam mais alteradas e "DSC", "EXC" ou "NC" não interfira nos cálculos
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:,
-                                         6:ultima_corrida+6].astype(int)
-
+mapa_corridas = {
+    1: {'tipo': 'Sprint', 'pontuacao': {i: 16 - i for i in range(1, 16)}},  # Corrida especial
+    2: {'tipo': 'Sprint'},
+    3: {'tipo': 'Principal'},
+    4: {'tipo': 'Sprint'},
+    5: {'tipo': 'Principal'},
+    6: {'tipo': 'Sprint'},
+    7: {'tipo': 'Principal'},
+    8: {'tipo': 'Sprint'},
+    9: {'tipo': 'Principal'},
+    10: {'tipo': 'Sprint'},
+    11: {'tipo': 'Principal'},
+    12: {'tipo': 'Sprint'},
+    13: {'tipo': 'Principal'},
+    14: {'tipo': 'Sprint'},
+    15: {'tipo': 'Principal'},
+    16: {'tipo': 'Sprint'},
+    17: {'tipo': 'Principal'},
+    18: {'tipo': 'Sprint'},
+    19: {'tipo': 'Principal'},
+    20: {'tipo': 'Sprint'},
+    21: {'tipo': 'Principal'},
+    22: {'tipo': 'Sprint'},
+    23: {'tipo': 'Principal'},
+}
 
 pontuacao_sprint = {
     1: 55, 2: 50, 3: 46, 4: 42, 5: 38, 6: 36, 7: 34, 8: 32, 9: 30, 10: 28,
@@ -169,11 +173,26 @@ pontuacao_principal = {
     31: 0, 32: 0, 33: 0, 34: 0
 }
 
-# Separar as corridas Sprint (ímpares) e Principal (pares)
-corridas_sprint = [col for idx, col in enumerate(
-    df.columns[6:29]) if (idx + 1) % 2 != 0]  # Ímpares
-corridas_principal = [col for idx, col in enumerate(
-    df.columns[6:30]) if (idx + 1) % 2 == 0]  # Pares
+colunas_corridas = df.columns[6:28]
+
+corridas_sprint = []
+corridas_principal = []
+valores_vitoria_por_coluna = {}
+
+for i, col in enumerate(colunas_corridas):
+    corrida_num = i + 1
+    corrida_info = mapa_corridas.get(corrida_num)
+    if not corrida_info:
+        continue
+    tipo = corrida_info['tipo']
+    pontuacao_personalizada = corrida_info.get('pontuacao')
+
+    if tipo == 'Sprint':
+        corridas_sprint.append(col)
+        valores_vitoria_por_coluna[col] = max(pontuacao_personalizada.values()) if pontuacao_personalizada else max(pontuacao_sprint.values())
+    elif tipo == 'Principal':
+        corridas_principal.append(col)
+        valores_vitoria_por_coluna[col] = max(pontuacao_principal.values())
 
 # Função para calcular a soma das pontuações por tipo de corrida (Sprint ou Principal)
 
@@ -203,112 +222,72 @@ def calcular_ranking(tipo_corrida, colunas_corridas):
     return df_rank
 
 
-# Corridas Sprint (ímpares)
-corridas_sprint = [col for idx, col in enumerate(
-    df.columns[6:28]) if (idx + 1) % 2 != 0]
-# Corridas Principal (pares)
-corridas_principal = [col for idx, col in enumerate(
-    df.columns[6:29]) if (idx + 1) % 2 == 0]
-
-# Passo 1: Contar vitórias em cada tipo de corrida (Sprint e Principal)
+# === Contar vitórias ===
 vitorias_sprint = {}
 vitorias_principal = {}
 vitorias_gerais = {}
 
-# Loop pelas linhas do DataFrame para contar as vitórias de cada piloto nas corridas Sprint e Principal
-for _, row in df.iterrows():
-    piloto = row['Piloto']
-
-    # Contando vitórias nas corridas Sprint (ímpares) - valores 55
-    vitorias_sprint_count = (row.iloc[6:30:2] == 55).sum()
-
-    # Contando vitórias nas corridas Principal (pares) - valores 80
-    vitorias_principal_count = (row.iloc[7:30:2] == 80).sum()
-
-    # Somando vitórias gerais (Sprint + Principal)
-    vitorias_geral_count = vitorias_sprint_count + vitorias_principal_count
-
-    # Armazenando o total de vitórias Sprint, Principal e Geral por piloto
-    vitorias_sprint[piloto] = vitorias_sprint_count
-    vitorias_principal[piloto] = vitorias_principal_count
-    vitorias_gerais[piloto] = vitorias_geral_count
-
-# Filtrando apenas pilotos que venceram ao menos uma corrida em cada tipo
-vitorias_sprint_filtradas = {
-    piloto: vitoria for piloto, vitoria in vitorias_sprint.items() if vitoria > 0}
-vitorias_principal_filtradas = {
-    piloto: vitoria for piloto, vitoria in vitorias_principal.items() if vitoria > 0}
-vitorias_gerais_filtradas = {
-    piloto: vitoria for piloto, vitoria in vitorias_gerais.items() if vitoria > 0}
-
-# Utilizando mesma lógica mas agora para equipes
-# Inicializando os dicionários para contar as vitórias das equipes nas corridas Sprint e Principal
 vitorias_sprint_equipes = {}
 vitorias_principal_equipes = {}
 
-# Loop pelas linhas do DataFrame para contar as vitórias de cada piloto nas corridas Sprint e Principal
+
 for _, row in df.iterrows():
     piloto = row['Piloto']
-
-    # Identificando a equipe do piloto (supondo que a coluna 'Equipe' exista)
     equipe = row['Equipe']
 
-    # Contando as vitórias nas corridas Sprint (ímpares) - valores 55
-    vitorias_sprint_count = (row[corridas_sprint] == 55).sum()
+    sprint_vitorias = 0
+    principal_vitorias = 0
 
-    # Contando as vitórias nas corridas Principal (pares) - valores 80
-    vitorias_principal_count = (row[corridas_principal] == 80).sum()
+    for col in corridas_sprint:
+        if pd.to_numeric(row[col], errors='coerce') == valores_vitoria_por_coluna[col]:
+            sprint_vitorias += 1
 
-    # Atualizando a contagem de vitórias para cada equipe
-    if vitorias_sprint_count > 0:
-        if equipe not in vitorias_sprint_equipes:
-            vitorias_sprint_equipes[equipe] = 0
-        vitorias_sprint_equipes[equipe] += vitorias_sprint_count
+    for col in corridas_principal:
+        if pd.to_numeric(row[col], errors='coerce') == valores_vitoria_por_coluna[col]:
+            principal_vitorias += 1
 
-    if vitorias_principal_count > 0:
-        if equipe not in vitorias_principal_equipes:
-            vitorias_principal_equipes[equipe] = 0
-        vitorias_principal_equipes[equipe] += vitorias_principal_count
+    total_vitorias = sprint_vitorias + principal_vitorias
 
-# Convertendo as vitórias para DataFrames
-vitorias_sprint_df = pd.DataFrame(
-    list(vitorias_sprint_equipes.items()), columns=['Equipe', 'Vitórias Sprint'])
-vitorias_principal_df = pd.DataFrame(list(
-    vitorias_principal_equipes.items()), columns=['Equipe', 'Vitórias Principal'])
+    vitorias_sprint[piloto] = sprint_vitorias
+    vitorias_principal[piloto] = principal_vitorias
+    vitorias_gerais[piloto] = total_vitorias
 
-# Unindo os DataFrames de vitórias Sprint e Principal
-vitorias_df = pd.merge(
-    vitorias_sprint_df, vitorias_principal_df, on='Equipe', how='outer').fillna(0)
+    vitorias_sprint_equipes[equipe] = vitorias_sprint_equipes.get(equipe, 0) + sprint_vitorias
+    vitorias_principal_equipes[equipe] = vitorias_principal_equipes.get(equipe, 0) + principal_vitorias
 
-# Somando as vitórias gerais (Sprint + Principal) por equipe
-vitorias_df['Vitórias Totais'] = vitorias_df['Vitórias Sprint'] + \
-    vitorias_df['Vitórias Principal']
+# Pilotos com pelo menos uma vitória em cada tipo
+vitorias_sprint_filtradas = {p: v for p, v in vitorias_sprint.items() if v > 0}
+vitorias_principal_filtradas = {p: v for p, v in vitorias_principal.items() if v > 0}
+vitorias_gerais_filtradas = {p: v for p, v in vitorias_gerais.items() if v > 0}
 
-# Ordenando as equipes pelo número total de vitórias
+# === Converter para DataFrame de vitórias por equipe ===
+vitorias_df = pd.DataFrame({
+    'Equipe': list(set(vitorias_sprint_equipes.keys()) | set(vitorias_principal_equipes.keys()))
+})
+vitorias_df['Vitórias Sprint'] = vitorias_df['Equipe'].map(vitorias_sprint_equipes).fillna(0).astype(int)
+vitorias_df['Vitórias Principal'] = vitorias_df['Equipe'].map(vitorias_principal_equipes).fillna(0).astype(int)
+vitorias_df['Vitórias Totais'] = vitorias_df['Vitórias Sprint'] + vitorias_df['Vitórias Principal']
 vitorias_df = vitorias_df.sort_values(by='Vitórias Totais', ascending=False)
 
-# Gerando o gráfico de vitórias das equipes nas corridas Sprint
+# === Gráficos ===
 fig_sprint_equipes = px.pie(vitorias_df,
                             names='Equipe',
                             values='Vitórias Sprint',
-                            title='Distribuição de Vitórias por Equipe - Corridas Sprint',
+                            title='Vitórias por Equipe - Corridas Sprint',
                             color='Equipe',
                             color_discrete_sequence=px.colors.qualitative.Set3)
 
-
-# Gerando o gráfico de vitórias das equipes nas corridas Principais
 fig_principal_equipes = px.pie(vitorias_df,
                                names='Equipe',
                                values='Vitórias Principal',
-                               title='Distribuição de Vitórias por Equipe - Corridas Principal',
+                               title='Vitórias por Equipe - Corridas Principal',
                                color='Equipe',
                                color_discrete_sequence=px.colors.qualitative.Set1)
 
-# Gerando o gráfico de vitórias totais por equipe
 fig_total_equipes = px.pie(vitorias_df,
                            names='Equipe',
                            values='Vitórias Totais',
-                           title='Distribuição de Vitórias Totais por Equipe',
+                           title='Vitórias Totais por Equipe',
                            color='Equipe',
                            color_discrete_sequence=px.colors.qualitative.Pastel)
 
@@ -364,7 +343,7 @@ def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrid
 
 # Criando abas de visualização
 tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-               'Principal', 'Análise de consistência', 'Manual', 'Montadora', 'Pódios',
+               'Principal', 'Análise de consistência', 'Montadora', 'Pódios',
                 'Resultados qualifyings', 'Estatisticas de qualifying', 'Comparação','Cortez'])
 
 with tabs[0]:
@@ -698,89 +677,28 @@ with tabs[4]:
     st.plotly_chart(fig)
 
 with tabs[5]:
-    # Calculando a próxima corrida
-    proxima_corrida = ultima_corrida + 1
-
-    # Verifica se o número da próxima corrida está dentro do limite de corridas
-    if proxima_corrida <= 24:
-        # Exibe a tabela interativa para o usuário editar as pontuações da próxima corrida
-        st.subheader(f"Insira as pontuações para a Corrida {proxima_corrida}")
-
-        # Definindo o nome da coluna da próxima corrida a ser editada
-        coluna_corrida = ultima_corrida+1
-        proxima_corrida = str(proxima_corrida)
-
-        # Criando uma cópia do DataFrame com apenas as colunas de interesse para a próxima corrida
-        df_editavel = df[['Piloto', 'Equipe', proxima_corrida]]
-
-        # Exibindo a tabela para edição interativa
-        df_editavel = st.data_editor(df_editavel)
-
-        # Atualiza as pontuações quando o botão for pressionado
-        if st.button("Atualizar Pontuações"):
-            # Atualiza as pontuações inseridas pelo usuário
-            for i, row in df_editavel.iterrows():
-                nova_pontuacao = row[proxima_corrida]
-                if pd.notna(nova_pontuacao) and nova_pontuacao != 0:
-                    df.at[i, proxima_corrida] = nova_pontuacao
-
-            df[proxima_corrida] = df[proxima_corrida].fillna(
-                0)
-            df["Soma"] = df["Soma"] + df[proxima_corrida]
-            df["Soma"] = df["Soma"].round(0).astype(int)
-            df[proxima_corrida] = df[proxima_corrida].round(0).astype(int)
-
-            # Ordenar o DataFrame do maior para o menor pela coluna "Soma"
-            df = df.sort_values(by="Soma", ascending=False)
-
-            # Atualizar a coluna "Posição" com base na nova ordem
-            df["Posição"] = range(1, len(df) + 1)
-
-            # Recalcular o Descarte após a atualização das pontuações
-            def recalcular_descarte(row):
-                # Filtra as pontuações válidas (não considera NaN nem "DSC")
-                # Droppa qualquer NaN (ou "DSC" convertido)
-                valid_scores = row[5:ultima_corrida+6].dropna()
-
-                # Se houver mais de 1 valor válido, calcula o descarte
-                if len(valid_scores) > 1:
-                    valid_scores_sorted = valid_scores.sort_values()
-                    # Soma das 2 menores pontuações
-                    descarte = valid_scores_sorted.iloc[:2].sum()
-                    return descarte
-                else:
-                    return 0
-
-            # Aplicando a função de recalcular o descarte
-            df['Descarte'] = df.apply(recalcular_descarte, axis=1)
-
-            # Atualizar a "Soma" após subtrair o "Descarte"
-            df["Soma"] = df["Soma"] - df["Descarte"]
-            df["Soma"] = df["Soma"].round(0).astype(int)
-
-            df_filtered = df.iloc[:, :ultima_corrida+7]
-            df_filtered['Descarte'] = df['Descarte']
-
-            # Aplicando o estilo no DataFrame
-            df_styled = df_filtered.style.apply(colorir_piloto, axis=1)
-
-            # Exibe o DataFrame atualizado
-            st.success(f"Pontuações da Corrida {
-                       proxima_corrida} atualizadas com sucesso!")
-            st.dataframe(df_styled, use_container_width=True)
-    else:
-        st.warning("A próxima corrida ultrapassa o número máximo de 24 corridas.")
-
-with tabs[6]:
     def campeonato_por_modelo(df, ultima_corrida):
-        resultado_campeonato = {}
-        logos = {
-            'Corolla': 'images/toyota.png',
-            'Cruze': 'images/chev.png'
+        # Mapeia os códigos do PDF para nomes reais
+        modelo_map = {
+            'Q': 'Mitsubishi',
+            'A': 'Crevrolet',
+            'S': 'Toyota'
         }
 
-        # Filtra os modelos para considerar apenas "Corolla" e "Cruze"
-        df_filtrado = df[df['Modelo'].isin(['Corolla', 'Cruze'])]
+        # Caminho dos logos (ajuste os arquivos conforme suas imagens)
+        logos = {
+            'Mitsubishi': 'images/mitsubishi.png',
+            'Crevrolet': 'images/chev.png',
+            'Toyota': 'images/toyota.png'
+        }
+
+        # Substitui os códigos do modelo pelos nomes reais
+        df['Modelo'] = df['Modelo'].map(modelo_map)
+
+        # Filtra os modelos conhecidos
+        df_filtrado = df[df['Modelo'].isin(modelo_map.values())]
+
+        resultado_campeonato = {}
 
         for modelo in df_filtrado['Modelo'].unique():
             df_modelo = df_filtrado[df_filtrado['Modelo'] == modelo]
@@ -803,137 +721,98 @@ with tabs[6]:
 
             resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
 
-        # Cria o DataFrame
         df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
                                      'Modelo', 'Pontuação Atual'])
 
-        # Adiciona logos ao DataFrame
-        df_campeonato['Logo'] = df_campeonato['Modelo'].apply(
-            lambda x: logos[x])
+        df_campeonato['Logo'] = df_campeonato['Modelo'].map(logos)
 
         return df_campeonato
 
     def exibir_tabela_com_logos(df_campeonato):
-        # Usando st.columns para criar duas colunas: uma para Corolla e outra para Cruze
-        col1, col2 = st.columns(2)
+        # Tamanho fixo (largura x altura) para os logos
+        tamanho_padrao = (250, 150)
 
-        with col1:
-            # Informações do Corolla
-            corolla_row = df_campeonato[df_campeonato['Modelo']
-                                        == 'Corolla'].iloc[0]
-            st.image(corolla_row['Logo'], width=200)  # Exibe o logo do Corolla
-            # Exibe a pontuação do Corolla
-            st.write(
-                f"Pontuação: {corolla_row['Pontuação Atual']} pontos")
+        # Divide colunas dinamicamente com base no número de modelos
+        cols = st.columns(len(df_campeonato))
 
-        with col2:
-            # Informações do Cruze
-            cruze_row = df_campeonato[df_campeonato['Modelo']
-                                      == 'Cruze'].iloc[0]
-            st.image(cruze_row['Logo'], width=270)  # Exibe o logo do Cruze
-            st.write(
-                f"Pontuação: {cruze_row['Pontuação Atual']} pontos")
+        for i, (_, row) in enumerate(df_campeonato.iterrows()):
+            with cols[i]:
+                # Abre e redimensiona a imagem com PIL
+                imagem = Image.open(row['Logo']).resize(tamanho_padrao)
+
+                # Exibe a imagem com tamanho fixo
+                st.image(imagem)
+
+                # Exibe nome e pontuação
+                st.markdown(f"### {row['Modelo']}")
+                st.write(f"**Pontuação:** {row['Pontuação Atual']} pontos")
 
     df_campeonato = campeonato_por_modelo(df, ultima_corrida)
-
-    # Exibe a tabela com logos e pontuação
     exibir_tabela_com_logos(df_campeonato)
 
     def evolucao_pontuacao(df, ultima_corrida):
-        # Inicializa um dicionário para armazenar as pontuações por corrida para cada modelo
-        # A lista 'Modelo' será usada para armazenar os modelos
-        evolucao = {'Modelo': []}
+        modelo_map = {
+            'Q': 'Mitsubishi',
+            'A': 'Crevrolet',
+            'S': 'Toyota'
+        }
 
-        # Adiciona as colunas das corridas ao dicionário
+        df['Modelo'] = df['Modelo'].map(modelo_map)
+        df_filtrado = df[df['Modelo'].isin(modelo_map.values())]
+
+        evolucao = {'Modelo': []}
         for corrida in range(1, ultima_corrida + 1):
             evolucao[f'Corrida {corrida}'] = []
 
-        # Filtra o DataFrame para considerar apenas "Corolla" e "Cruze"
-        df_filtrado = df[df['Modelo'].isin(['Corolla', 'Cruze'])]
-
-        # Itera sobre os modelos "Corolla" e "Cruze"
         for modelo in df_filtrado['Modelo'].unique():
             df_modelo = df_filtrado[df_filtrado['Modelo'] == modelo]
-
-            # Adiciona o modelo à lista 'Modelo'
             evolucao['Modelo'].append(modelo)
 
-            # Itera sobre as corridas (de 1 até a última corrida)
             for corrida in range(1, ultima_corrida + 1):
                 coluna_corrida = str(corrida)
 
                 if coluna_corrida in df_modelo.columns:
-                    # Filtra os pilotos e suas pontuações para a corrida atual
                     df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
                         by=coluna_corrida, ascending=False)
-
-                    # Obtém os dois maiores pontuadores dessa corrida
                     top_2 = df_pontuacao.head(2)
-
-                    # Soma as duas maiores pontuações dessa corrida
-                    pontuacao_total_corrida = top_2[coluna_corrida].apply(
+                    pontuacao_total = top_2[coluna_corrida].apply(
                         pd.to_numeric, errors='coerce').sum()
-
-                    # Adiciona essa soma ao acumulado da corrida
-                    evolucao[f'Corrida {corrida}'].append(
-                        pontuacao_total_corrida)
+                    evolucao[f'Corrida {corrida}'].append(pontuacao_total)
                 else:
-                    # Se não houver dados para a corrida, assume pontuação 0
                     evolucao[f'Corrida {corrida}'].append(0)
 
-        # Converte o dicionário em um DataFrame
         df_evolucao = pd.DataFrame(evolucao)
-
-        # Calcula a "Soma" total de cada modelo, somando todas as corridas
-        # Soma as corridas (excluindo a coluna 'Modelo')
         df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
-
-        # Reorganiza as colunas para garantir que "Soma" seja a última coluna
-        df_evolucao = df_evolucao[[
-            'Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
-
-        # Exibe o DataFrame resultante
+        df_evolucao = df_evolucao[[f'Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
         return df_evolucao
 
     df_evolucao = evolucao_pontuacao(df, ultima_corrida)
-
-    # Exibe o DataFrame de evolução no Streamlit
     st.write("Evolução das Pontuações ao Longo das Corridas:")
-    st.dataframe(df_evolucao,hide_index=True)
+    st.dataframe(df_evolucao, hide_index=True)
 
     def calcular_pontuacao_acumulada(df_evolucao):
-        # Calcular a pontuação acumulada para cada modelo
         df_acumulado = df_evolucao.copy()
         modelos = df_acumulado["Modelo"].unique()
 
-        # Iterar sobre os modelos e calcular a pontuação acumulada para cada um
         for modelo in modelos:
             df_modelo = df_acumulado[df_acumulado["Modelo"] == modelo]
-            # Calculando a pontuação acumulada
             df_modelo.iloc[:, 1:] = df_modelo.iloc[:, 1:].cumsum(axis=1)
             df_acumulado.loc[df_acumulado["Modelo"] == modelo,
                              df_modelo.columns[1:]] = df_modelo.iloc[:, 1:]
-
         return df_acumulado
 
     def plotar_evolucao_acumulada(df_evolucao):
-        # Calculando a pontuação acumulada
         df_acumulado = calcular_pontuacao_acumulada(df_evolucao)
-
-        # Excluindo a coluna "Soma" para o gráfico
         df_acumulado_sem_soma = df_acumulado.drop(columns=["Soma"])
-
-        # Converte o DataFrame de "largura" para "longo" (melt)
         df_melted = df_acumulado_sem_soma.melt(
             id_vars=["Modelo"], var_name="Corrida", value_name="Pontuação Acumulada")
 
-        # Definindo as cores personalizadas para os modelos
         color_map = {
-            "Corolla": "red",  # Corolla em vermelho
-            "Cruze": "orange"  # Cruze em laranja
+            "Toyota": "red",
+            "Crevrolet": "orange",
+            "Mitsubishi": "blue"
         }
 
-        # Cria o gráfico de linha interativo com Plotly
         fig = px.line(df_melted,
                       x="Corrida",
                       y="Pontuação Acumulada",
@@ -945,13 +824,11 @@ with tabs[6]:
                       markers=True,
                       color_discrete_map=color_map)
 
-        # Exibe o gráfico no Streamlit
         st.plotly_chart(fig, use_container_width=True)
 
-    # Exemplo de como você pode chamar a função
     plotar_evolucao_acumulada(df_evolucao)
 
-with tabs[7]:
+with tabs[6]:
     def calcular_podios(df, ultima_corrida):
         # Dicionário para armazenar os pódios
         podios = {}
@@ -1094,7 +971,7 @@ with tabs[7]:
     st.write("### Estatísticas de Pódios por Equipe")
     st.dataframe(styled_df_podios_equipe)
 
-with tabs[8]:
+with tabs[7]:
     def extrair_dados_pdf(arquivo_pdf):
         """Extrai dados de um PDF e retorna um DataFrame com informações dos pilotos."""
         dados = []
@@ -1191,7 +1068,7 @@ with tabs[8]:
     else:
         st.write("Etapa não encontrada.")
 
-with tabs[9]:
+with tabs[8]:
     def contar_avancos(dados_qualifying):
         contagem_avanco_q2 = {}
         contagem_avanco_q3 = {}
@@ -1363,7 +1240,7 @@ with tabs[9]:
     st.markdown("<h2 style='text-align: center;'>Estatísticas dos Pilotos</h2>", unsafe_allow_html=True)
     st.dataframe(styled_df_estatisticas, hide_index=True)
 
-with tabs[10]:
+with tabs[9]:
     st.markdown("<h2 style='text-align: center;'>Comparação qualifying</h2>",
                 unsafe_allow_html=True)
 
