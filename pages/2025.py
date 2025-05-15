@@ -6,6 +6,7 @@ from PIL import Image
 import plotly.graph_objs as go
 import matplotlib.pyplot as plt
 import os
+import re
 
 
 # Configurando o título da página URL
@@ -419,7 +420,9 @@ with tabs[1]:
         equipe = row['Equipe'].strip().upper()
         color = color_map_equipes.get(equipe, '')
         return [color] * len(row) if color else [''] * len(row)
-
+    
+    # Substituir o índice por espaços únicos para evitar erro com Styler
+    df_equipes_sorted.index = [' ' * (i + 1) for i in range(len(df_equipes_sorted))]
     # Aplicar o estilo no DataFrame final correto
     df_equipes_styled = df_equipes_sorted.style.apply(colorir_equipe, axis=1)
 
@@ -677,31 +680,31 @@ with tabs[4]:
     st.plotly_chart(fig)
 
 with tabs[5]:
-    def campeonato_por_modelo(df, ultima_corrida):
-        # Mapeia os códigos do PDF para nomes reais
-        modelo_map = {
-            'Q': 'Mitsubishi',
-            'A': 'Crevrolet',
-            'S': 'Toyota'
-        }
+    # Garantir que as colunas de corrida são strings
+    df.columns = df.columns.map(str)
 
-        # Caminho dos logos (ajuste os arquivos conforme suas imagens)
+    # Mapeamento de códigos para nomes reais
+    modelo_map = {
+        'Q': 'Mitsubishi',
+        'A': 'Crevrolet',
+        'S': 'Toyota'
+    }
+
+    # Substitui os códigos do modelo pelos nomes reais e remove possíveis NaNs
+    df['Modelo'] = df['Modelo'].map(modelo_map)
+    df = df[df['Modelo'].notna()]  # Remove linhas com Modelo não mapeado
+
+    def campeonato_por_modelo(df, ultima_corrida):
         logos = {
             'Mitsubishi': 'images/mitsubishi.png',
             'Crevrolet': 'images/chev.png',
             'Toyota': 'images/toyota.png'
         }
 
-        # Substitui os códigos do modelo pelos nomes reais
-        df['Modelo'] = df['Modelo'].map(modelo_map)
-
-        # Filtra os modelos conhecidos
-        df_filtrado = df[df['Modelo'].isin(modelo_map.values())]
-
         resultado_campeonato = {}
 
-        for modelo in df_filtrado['Modelo'].unique():
-            df_modelo = df_filtrado[df_filtrado['Modelo'] == modelo]
+        for modelo in df['Modelo'].unique():
+            df_modelo = df[df['Modelo'] == modelo]
             pontuacao_total_por_modelo = []
 
             for corrida in range(1, ultima_corrida + 1):
@@ -709,12 +712,11 @@ with tabs[5]:
 
                 if coluna_corrida in df_modelo.columns:
                     df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
-                        by=coluna_corrida, ascending=False)
-
+                        by=coluna_corrida, ascending=False
+                    )
                     top_2 = df_pontuacao.head(2)
                     pontuacao_total = top_2[coluna_corrida].apply(
                         pd.to_numeric, errors='coerce').sum()
-
                     pontuacao_total_por_modelo.append(pontuacao_total)
                 else:
                     pontuacao_total_por_modelo.append(0)
@@ -722,28 +724,21 @@ with tabs[5]:
             resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
 
         df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
-                                     'Modelo', 'Pontuação Atual'])
-
+            'Modelo', 'Pontuação Atual'
+        ])
         df_campeonato['Logo'] = df_campeonato['Modelo'].map(logos)
 
         return df_campeonato
 
     def exibir_tabela_com_logos(df_campeonato):
-        # Tamanho fixo (largura x altura) para os logos
-        tamanho_padrao = (250, 150)
+        tamanho_padrao = (250, 150)  # Largura x Altura padrão
 
-        # Divide colunas dinamicamente com base no número de modelos
         cols = st.columns(len(df_campeonato))
 
         for i, (_, row) in enumerate(df_campeonato.iterrows()):
             with cols[i]:
-                # Abre e redimensiona a imagem com PIL
                 imagem = Image.open(row['Logo']).resize(tamanho_padrao)
-
-                # Exibe a imagem com tamanho fixo
                 st.image(imagem)
-
-                # Exibe nome e pontuação
                 st.markdown(f"### {row['Modelo']}")
                 st.write(f"**Pontuação:** {row['Pontuação Atual']} pontos")
 
@@ -751,14 +746,7 @@ with tabs[5]:
     exibir_tabela_com_logos(df_campeonato)
 
     def evolucao_pontuacao(df, ultima_corrida):
-        modelo_map = {
-            'Q': 'Mitsubishi',
-            'A': 'Crevrolet',
-            'S': 'Toyota'
-        }
-
-        df['Modelo'] = df['Modelo'].map(modelo_map)
-        df_filtrado = df[df['Modelo'].isin(modelo_map.values())]
+        df_filtrado = df[df['Modelo'].isin(['Mitsubishi', 'Crevrolet', 'Toyota'])]
 
         evolucao = {'Modelo': []}
         for corrida in range(1, ultima_corrida + 1):
@@ -773,7 +761,8 @@ with tabs[5]:
 
                 if coluna_corrida in df_modelo.columns:
                     df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
-                        by=coluna_corrida, ascending=False)
+                        by=coluna_corrida, ascending=False
+                    )
                     top_2 = df_pontuacao.head(2)
                     pontuacao_total = top_2[coluna_corrida].apply(
                         pd.to_numeric, errors='coerce').sum()
@@ -783,11 +772,13 @@ with tabs[5]:
 
         df_evolucao = pd.DataFrame(evolucao)
         df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
-        df_evolucao = df_evolucao[[f'Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
+        df_evolucao = df_evolucao[['Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
+
         return df_evolucao
 
     df_evolucao = evolucao_pontuacao(df, ultima_corrida)
-    st.write("Evolução das Pontuações ao Longo das Corridas:")
+
+    st.write("### Evolução das Pontuações ao Longo das Corridas")
     st.dataframe(df_evolucao, hide_index=True)
 
     def calcular_pontuacao_acumulada(df_evolucao):
@@ -799,13 +790,18 @@ with tabs[5]:
             df_modelo.iloc[:, 1:] = df_modelo.iloc[:, 1:].cumsum(axis=1)
             df_acumulado.loc[df_acumulado["Modelo"] == modelo,
                              df_modelo.columns[1:]] = df_modelo.iloc[:, 1:]
+
         return df_acumulado
 
     def plotar_evolucao_acumulada(df_evolucao):
         df_acumulado = calcular_pontuacao_acumulada(df_evolucao)
         df_acumulado_sem_soma = df_acumulado.drop(columns=["Soma"])
+
         df_melted = df_acumulado_sem_soma.melt(
-            id_vars=["Modelo"], var_name="Corrida", value_name="Pontuação Acumulada")
+            id_vars=["Modelo"],
+            var_name="Corrida",
+            value_name="Pontuação Acumulada"
+        )
 
         color_map = {
             "Toyota": "red",
@@ -819,43 +815,44 @@ with tabs[5]:
                       color="Modelo",
                       line_group="Modelo",
                       title="Evolução Acumulada das Pontuações ao Longo das Corridas",
-                      labels={"Pontuação Acumulada": "Pontuação Acumulada",
-                              "Corrida": "Corridas"},
+                      labels={"Pontuação Acumulada": "Pontuação Acumulada", "Corrida": "Corridas"},
                       markers=True,
                       color_discrete_map=color_map)
 
         st.plotly_chart(fig, use_container_width=True)
 
     plotar_evolucao_acumulada(df_evolucao)
-
+    
 with tabs[6]:
     def calcular_podios(df, ultima_corrida):
         # Dicionário para armazenar os pódios
         podios = {}
 
-        # Iterar sobre as corridas até a última corrida informada
-        for corrida in range(1, ultima_corrida):
-            # Verifica se a corrida é Sprint ou Principal
-            if corrida % 2 != 0:  # Sprint
-                pontuacao = pontuacao_sprint
-            else:  # Principal
-                pontuacao = pontuacao_principal
+        for corrida in range(1, ultima_corrida + 1):
+            nome_coluna = str(corrida)  # Ex: "1", "2", etc.
 
-            # Obter a coluna da corrida
-            coluna_corrida = df.iloc[:, 5 + corrida]
+            # Verifica se a coluna existe no DataFrame
+            if nome_coluna not in df.columns:
+                continue
 
-            # Obter os três primeiros pilotos
-            top_3_indices = coluna_corrida.nlargest(3).index
+            # Converte para numérico (ignora "DSC", "EXC", etc.)
+            pontuacoes = pd.to_numeric(df[nome_coluna], errors='coerce')
 
-            for idx in top_3_indices:
+            # Pega os 3 maiores valores válidos
+            top_3 = pontuacoes.nlargest(3).dropna()
+
+            for idx in top_3.index:
                 piloto = df.at[idx, 'Piloto']
-                if piloto not in podios:
-                    podios[piloto] = 0
-                podios[piloto] += 1  # Incrementa o contador de pódios
+                podios[piloto] = podios.get(piloto, 0) + 1
 
-        # Converter o dicionário em DataFrame
-        df_podios = pd.DataFrame(list(podios.items()),
-                                 columns=['Piloto', 'Pódios'])
+        # Cria DataFrame com todos os pilotos (mesmo quem tem 0 pódios)
+        df_podios = pd.DataFrame({'Piloto': df['Piloto'].unique()})
+        df_podios['Pódios'] = df_podios['Piloto'].map(podios).fillna(0).astype(int)
+
+        # Ranking
+        df_podios = df_podios.sort_values(by='Pódios', ascending=False).reset_index(drop=True)
+        df_podios['Ranking'] = df_podios['Pódios'].rank(method='min', ascending=False).astype(int)
+
         return df_podios
 
     # Calcular os pódios
@@ -1026,23 +1023,31 @@ with tabs[7]:
             colunas = ['Posição', 'Numeral', 'Piloto']
             # Cria o DataFrame com as 3 colunas
             df_qualifying = pd.DataFrame(dados, columns=colunas)
+            df_qualifying['Piloto'] = df_qualifying['Piloto'].str.title()
             return df_qualifying
         else:
             st.warning('Nenhuma linha de dados encontrada.')
             return None
+        
 
     def carregar_dados_qualifying():
-        """Carrega dados de todas as etapas de qualifying e retorna um dicionário de DataFrames."""
+        """Carrega automaticamente os dados de qualifying baseando-se nos arquivos da pasta."""
         dados_qualifying = {}
-        for i in range(1, 13):  # Para as 12 etapas
-            # Ajuste o caminho conforme necessário
-            pdf_path = f'qualifying/Q{i}.pdf'
+        pasta_qualifying = 'qualifying2025/'
+
+        # Lista todos os arquivos que seguem o padrão Q*.pdf
+        arquivos_pdf = [f for f in os.listdir(pasta_qualifying) if re.match(r'Q\d+\.pdf', f)]
+
+        # Extrai os números das etapas, ordena e percorre
+        etapas = sorted([int(re.findall(r'\d+', f)[0]) for f in arquivos_pdf])
+
+        for etapa in etapas:
+            pdf_path = os.path.join(pasta_qualifying, f'Q{etapa}.pdf')
             df_qualifying = extrair_dados_pdf(pdf_path)
             if df_qualifying is not None and not df_qualifying.empty:
-                # Adiciona o DataFrame ao dicionário com a etapa como chave
-                dados_qualifying[f'Etapa {i}'] = df_qualifying
+                dados_qualifying[f'Etapa {etapa}'] = df_qualifying
 
-        return dados_qualifying  # Retorna o dicionário de DataFrames
+        return dados_qualifying
 
     # Carrega os dados de qualifying
     dados_qualifying = carregar_dados_qualifying()

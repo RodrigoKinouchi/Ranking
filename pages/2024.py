@@ -1191,7 +1191,7 @@ with tabs[8]:
         dados_qualifying = {}
         for i in range(1, 13):  # Para as 12 etapas
             # Ajuste o caminho conforme necessário
-            pdf_path = f'qualifying/Q{i}.pdf'
+            pdf_path = f'qualifying2024/Q{i}.pdf'
             df_qualifying = extrair_dados_pdf(pdf_path)
             if df_qualifying is not None and not df_qualifying.empty:
                 # Adiciona o DataFrame ao dicionário com a etapa como chave
