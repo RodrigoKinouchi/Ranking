@@ -58,6 +58,15 @@ df = df.drop(index=0)
 df["Piloto"] = df["Piloto"].str.title()
 df["Equipe"] = df["Equipe"].str.title()
 
+modelo_map = {
+    'Q': 'Mitsubishi',
+    'A': 'Crevrolet',
+    'S': 'Toyota'
+}
+
+# Substitui os códigos pela montadora
+df['Modelo'] = df['Modelo'].map(modelo_map)
+
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
@@ -680,19 +689,6 @@ with tabs[4]:
     st.plotly_chart(fig)
 
 with tabs[5]:
-    # Garantir que as colunas de corrida são strings
-    df.columns = df.columns.map(str)
-
-    # Mapeamento de códigos para nomes reais
-    modelo_map = {
-        'Q': 'Mitsubishi',
-        'A': 'Crevrolet',
-        'S': 'Toyota'
-    }
-
-    # Substitui os códigos do modelo pelos nomes reais e remove possíveis NaNs
-    df['Modelo'] = df['Modelo'].map(modelo_map)
-    df = df[df['Modelo'].notna()]  # Remove linhas com Modelo não mapeado
 
     def campeonato_por_modelo(df, ultima_corrida):
         logos = {
@@ -703,20 +699,20 @@ with tabs[5]:
 
         resultado_campeonato = {}
 
-        for modelo in df['Modelo'].unique():
+        for modelo in df['Modelo'].dropna().unique():
             df_modelo = df[df['Modelo'] == modelo]
             pontuacao_total_por_modelo = []
 
             for corrida in range(1, ultima_corrida + 1):
                 coluna_corrida = str(corrida)
-
                 if coluna_corrida in df_modelo.columns:
                     df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
                         by=coluna_corrida, ascending=False
                     )
                     top_2 = df_pontuacao.head(2)
                     pontuacao_total = top_2[coluna_corrida].apply(
-                        pd.to_numeric, errors='coerce').sum()
+                        pd.to_numeric, errors='coerce'
+                    ).sum()
                     pontuacao_total_por_modelo.append(pontuacao_total)
                 else:
                     pontuacao_total_por_modelo.append(0)
@@ -1344,7 +1340,7 @@ with tabs[9]:
     # Exibe o gráfico de comparação
     st.plotly_chart(fig_comparacao)
 
-    with tabs[11]:
+    with tabs[10]:
         st.header("Recorte de etapas")
 
         # Cria um formulário para agrupar os widgets
