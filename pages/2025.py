@@ -439,7 +439,7 @@ with tabs[1]:
     # Exibir
     st.write("### Tabela de Pontuação por Equipe")
     st.dataframe(df_equipes_styled.hide(
-        axis="index"), use_container_width=True)
+        axis="index"), use_container_width=True, hide_index= True)
 
     # Gráfico de vitórias
     st.subheader("Vitórias Totais por Equipe")
