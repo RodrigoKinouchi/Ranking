@@ -70,7 +70,7 @@ df['Modelo'] = df['Modelo'].map(modelo_map)
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
-    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=1, step=1)
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=3, step=1)
 
 # Substitui "." (etapas futuras) por NaN
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace(".", pd.NA)
@@ -122,13 +122,13 @@ df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].apply(
 )
 
 # Calcula o descarte das duas menores pontuações válidas
-def calcular_descarte(row):
-    pontuacoes_validas = row[6:ultima_corrida+6].dropna()
-    if len(pontuacoes_validas) > 1:
-        return pontuacoes_validas.nsmallest(2).sum()
-    return 0
+#def calcular_descarte(row):
+    #pontuacoes_validas = row[6:ultima_corrida+6].dropna()
+    #if len(pontuacoes_validas) > 1:
+        #return pontuacoes_validas.nsmallest(2).sum()
+    #return 0
 
-df['Descarte'] = df.apply(calcular_descarte, axis=1).round(0).astype(int)
+#df['Descarte'] = df.apply(calcular_descarte, axis=1).round(0).astype(int)
 
 # Substitui NaN restantes por 0 para soma
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].fillna(0)
@@ -137,7 +137,7 @@ df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].fillna(0)
 df['Soma'] = df.iloc[:, 6:ultima_corrida+6].sum(axis=1).round(0).astype(int)
 
 # Subtrai o descarte da soma total
-df['Soma'] = (df['Soma'] - df['Descarte']).round(0).astype(int)
+#df['Soma'] = (df['Soma'] - df['Descarte']).round(0).astype(int)
 
 # Garante que o tipo é numérico inteiro (evita erros em plotagens e análises futuras)
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].astype(int)
