@@ -719,6 +719,10 @@ with tabs[5]:
 
             resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
 
+        # Adiciona +2 pontos para Mitsubishi pole 2 etapa
+        if 'Mitsubishi' in resultado_campeonato:
+            resultado_campeonato['Mitsubishi'] += 2
+
         df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
             'Modelo', 'Pontuação Atual'
         ])
@@ -768,6 +772,8 @@ with tabs[5]:
 
         df_evolucao = pd.DataFrame(evolucao)
         df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
+        #Pontos da Pole 2 Etapa
+        df_evolucao.loc[df_evolucao['Modelo'] == 'Mitsubishi', 'Soma'] += 2
         df_evolucao = df_evolucao[['Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
 
         return df_evolucao
