@@ -365,7 +365,8 @@ with tabs[0]:
             'Gabriel Casagrande': 'background-color: purple; color: white;',
             'Lucas Foresti': 'background-color: gray; color: white;',
             'Cesar Ramos': 'background-color: yellow; color: black;',
-            'Thiago Camilo': 'background-color: red; color: white;'
+            'Thiago Camilo': 'background-color: red; color: white;',
+            'Helio Castroneves': 'background-color: green; color: white;'
         }
 
         # Aplica a cor se o nome do piloto corresponder
