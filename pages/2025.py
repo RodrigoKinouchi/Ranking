@@ -1348,53 +1348,58 @@ with tabs[9]:
     st.plotly_chart(fig_comparacao)
 
     with tabs[10]:
-        st.header("Recorte de etapas")
-
         # Cria um formulário para agrupar os widgets
         with st.form(key='form_recorte'):
             # Opção para selecionar um intervalo de etapas
             intervalo = st.slider("Selecione um intervalo de etapas (caso não queira usar o slider, deixe fixo em 0)", 0, 24, (5, 15))
 
             # Opção para selecionar etapas específicas
-            etapas_opcoes = [str(i) for i in range(1, 25)]  # Etapas de "1" a "24"
+            etapas_opcoes = [str(i) for i in range(1, ultima_corrida + 1)]  # Etapas de "1" a "24"
             etapas_selecionadas = st.multiselect("Selecione etapas específicas", etapas_opcoes)
 
             # Botão para aplicar o filtro
             submit_button = st.form_submit_button("Aplicar Filtro")
 
         if submit_button:
-            # Combina as seleções
-            if intervalo[0] == 0 and intervalo[1] == 0:
-                # Se o intervalo for 0, apenas use as etapas selecionadas
-                etapas_final = set(etapas_selecionadas)
+            if intervalo[1] > ultima_corrida:
+                st.error(
+                        f"Você selecionou um intervalo de corridas de {intervalo[0]} até {intervalo[1]}, "
+                        f"mas apenas até a corrida {ultima_corrida} já aconteceu. "
+                        "Ajuste o intervalo e tente novamente."
+                    )
             else:
-                # Caso contrário, combine o intervalo com as etapas selecionadas
-                etapas_final = set(etapas_opcoes[intervalo[0]-1:intervalo[1]]) | set(etapas_selecionadas)
+                # Combina as seleções
+                if intervalo[0] == 0 and intervalo[1] == 0:
+                    # Se o intervalo for 0, apenas use as etapas selecionadas
+                    etapas_final = set(etapas_selecionadas)
+                else:
+                    # Caso contrário, combine o intervalo com as etapas selecionadas
+                    etapas_final = set(etapas_opcoes[intervalo[0]-1:intervalo[1]]) | set(etapas_selecionadas)
 
-            # Filtra o DataFrame
-            def filter_dataframe(df, etapas_selecionadas):
-                # Mantém a ordem das colunas
-                colunas_filtradas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma'] + \
-                                    [etapa for etapa in novas_colunas[5:30] if etapa in etapas_selecionadas] + \
-                                    ['Descarte']
-                return df[colunas_filtradas]
+                # Filtra o DataFrame
+                def filter_dataframe(df, etapas_selecionadas):
+                    # Mantém a ordem das colunas
+                    colunas_filtradas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma'] + \
+                                        [etapa for etapa in novas_colunas[5:30] if etapa in etapas_selecionadas] + \
+                                        ['Descarte']
+                    return df[colunas_filtradas]
 
-            df_recorte = filter_dataframe(df_cortez, etapas_final)
-            
-            # Calcula a soma das pontuações das etapas filtradas
-            df_recorte['Soma'] = df_recorte[[etapa for etapa in etapas_final if etapa in df_cortez.columns]].sum(axis=1)
+                df_recorte = filter_dataframe(df_cortez, etapas_final)
+                
+                # Calcula a soma das pontuações das etapas filtradas
+                df_recorte['Soma'] = df_recorte[[etapa for etapa in etapas_final if etapa in df_cortez.columns]].sum(axis=1)
 
-            # Ordena o DataFrame pela coluna "Soma"
-            df_recorte = df_recorte.sort_values(by='Soma', ascending=False).reset_index(drop=True)
+                # Ordena o DataFrame pela coluna "Soma"
+                df_recorte = df_recorte.sort_values(by='Soma', ascending=False).reset_index(drop=True)
 
-            # Recalcula a coluna "Posição"
-            df_recorte['Posição'] = range(1, len(df_recorte) + 1)
+                # Recalcula a coluna "Posição"
+                df_recorte['Posição'] = range(1, len(df_recorte) + 1)
 
-            # Remove a coluna 'Descarte' antes de aplicar o estilo
-            df_recorte_sem_descarte = df_recorte.drop(columns=['Descarte'])
+                # Remove a coluna 'Descarte' antes de aplicar o estilo
+                df_recorte_sem_descarte = df_recorte.drop(columns=['Descarte'])
 
-            # Aplica a coloração usando a função colorir_piloto
-            styled_df_recorte = df_recorte_sem_descarte.style.apply(colorir_piloto, axis=1)
+                # Aplica a coloração usando a função colorir_piloto
+                styled_df_recorte = df_recorte_sem_descarte.style.apply(colorir_piloto, axis=1)
 
-            # Exibe o DataFrame filtrado
-            st.dataframe(styled_df_recorte, hide_index=True)
+                # Exibe o DataFrame filtrado
+                st.dataframe(styled_df_recorte, hide_index=True)
