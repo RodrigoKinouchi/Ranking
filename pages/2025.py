@@ -70,7 +70,7 @@ df['Modelo'] = df['Modelo'].map(modelo_map)
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
-    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=5, step=1)
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=7, step=1)
 
 # Substitui "." (etapas futuras) por NaN
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace(".", pd.NA)
