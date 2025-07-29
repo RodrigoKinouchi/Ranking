@@ -426,6 +426,7 @@ with tabs[1]:
         color_map_equipes = {
             'IPIRANGA RACING': 'background-color: yellow; color: black;',
             'AMATTHEIS VOGEL': 'background-color: orange; color: black;',
+            'AMATTHEIS RACING': 'background-color: green; color: black;'
         }
         equipe = row['Equipe'].strip().upper()
         color = color_map_equipes.get(equipe, '')
@@ -688,6 +689,23 @@ with tabs[4]:
         template="plotly_dark"
     )
     st.plotly_chart(fig)
+
+        # Junta com o DataFrame principal para trazer a equipe de cada piloto
+    df_eficiencia = df_abandonos.merge(df[['Piloto', 'Equipe']], on='Piloto', how='left')
+
+    # Agrupa por equipe e calcula a média da eficiência dos pilotos
+    df_eficiencia_equipes = df_eficiencia.groupby('Equipe', as_index=False)['Eficiência'].mean()
+
+    # Arredonda para 1 casa decimal e ordena da maior para a menor eficiência
+    df_eficiencia_equipes['Eficiência'] = df_eficiencia_equipes['Eficiência'].round(1)
+    df_eficiencia_equipes = df_eficiencia_equipes.sort_values(by='Eficiência', ascending=False)
+
+    df_eficiencia_equipes_styled = df_eficiencia_equipes.style.apply(colorir_equipe, axis=1).format({
+    'Eficiência': '{:.1f}%'
+    })
+
+    st.write("#### Eficiência Média por Equipe")
+    st.dataframe(df_eficiencia_equipes_styled, hide_index=True)
 
 with tabs[5]:
 
