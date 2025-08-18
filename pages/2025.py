@@ -666,7 +666,7 @@ with tabs[4]:
     st.dataframe(styled_df_abandonos, hide_index=True)
 
     # Média de Pontuação por Corrida (Ordenada)
-    df['Média por Corrida'] = df['Soma'] / ultima_corrida
+    df['Média por Corrida'] = (df['Soma'] / ultima_corrida).round(2)
     df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False)
     st.write("#### Ranking de Pilotos por Média de Pontuação por Corrida")
     st.dataframe(
