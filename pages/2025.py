@@ -73,7 +73,7 @@ ultima_corrida = st.number_input(
     "Informe o número da última corrida realizada", min_value=1, max_value=24, value=11, step=1)
 
 # Substitui "." (etapas futuras) por NaN
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace(".", pd.NA)
+df.iloc[:, 6:ultima_corrida+5] = df.iloc[:, 6:ultima_corrida+5].replace(".", pd.NA)
 
 # Criar o DataFrame para contabilizar os motivos de abandono
 df_abandonos = pd.DataFrame(columns=["Piloto", "NC", "EXC", "DSC", "NP"])
@@ -89,7 +89,7 @@ for _, row in df.iterrows():
     dsc_count = 0
     np_count = 0
 
-    for score in row[6:ultima_corrida+5]:
+    for score in row[6:ultima_corrida+6]:
         if score == "NC":
             nc_count += 1
         elif score == "EXC":
