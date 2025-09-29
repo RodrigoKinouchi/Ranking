@@ -89,7 +89,7 @@ for _, row in df.iterrows():
     dsc_count = 0
     np_count = 0
 
-    for score in row[6:ultima_corrida+6]:
+    for score in row[6:ultima_corrida+5]:
         if score == "NC":
             nc_count += 1
         elif score == "EXC":
