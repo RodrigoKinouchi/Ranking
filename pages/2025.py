@@ -1095,6 +1095,7 @@ with tabs[7]:
         st.write("Etapa não encontrada.")
 
 with tabs[8]:
+
     def contar_avancos(dados_qualifying):
         contagem_avanco_q2 = {}
         contagem_avanco_q3 = {}
@@ -1122,9 +1123,25 @@ with tabs[8]:
 
         return contagem_avanco_q2, contagem_avanco_q3, contagem_zona_inversao
 
+    # Dicionário de exceções — etapas que não devem contar para o cálculo médio
+    excecoes = {
+        "Cesar Ramos": [8]  # Ignorar etapa 8
+    }
+
     def calcular_estatisticas(dados_qualifying, piloto_selecionado):
         posicoes = []
+        etapas_excluidas = excecoes.get(piloto_selecionado, [])
+
         for etapa, df in dados_qualifying.items():
+            # Extrai o número da etapa a partir da string da chave ("Etapa 8" → 8)
+            match = re.search(r'\d+', etapa)
+            etapa_num = int(match.group()) if match else etapa
+
+            # Ignora a etapa se estiver nas exceções do piloto
+            if etapa_num in etapas_excluidas:
+                continue
+
+            # Filtra os dados do piloto
             piloto_data = df[df['Piloto'] == piloto_selecionado]
             if not piloto_data.empty:
                 posicao = int(piloto_data['Posição'].values[0])
