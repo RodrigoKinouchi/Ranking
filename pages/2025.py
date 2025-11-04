@@ -108,6 +108,7 @@ for _, row in df.iterrows():
     })
 
 df_abandonos = pd.DataFrame(abandonos_data)
+df_original_para_descartes = df.copy()
 
 # Substituições para facilitar os cálculos
 df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace({
@@ -385,6 +386,127 @@ with tabs[0]:
     # Exibir a tabela com rolagem apenas vertical
     # A tabela ocupa toda a largura disponível
     st.dataframe(df_styled, use_container_width=True)
+
+    # ========== NOVA TABELA COM DESCARTES ==========
+    st.write("---")
+    st.write("### Tabela de Pontuação do Campeonato - COM DESCARTES")
+
+    df_com_descarte = df.reset_index()
+
+    # Garante que a coluna 'Posição' exista
+    if 'Posição' not in df_com_descarte.columns:
+        df_com_descarte.insert(0, 'Posição', range(1, len(df_com_descarte) + 1))
+
+    # Listar colunas de pontuação (corridas anteriores à última)
+    colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
+
+    def calcular_descartes(row):
+        pontuacoes_validas = []
+        
+        for col in colunas_pontuacao:
+            if col in row.index:
+                try:
+                    valor = row[col]
+                    valor_numeric = pd.to_numeric(valor, errors='coerce')
+                    # Apenas valores > 0 são válidos para descarte (ignora 0 e NaN)
+                    if pd.notna(valor_numeric) and valor_numeric > 0:
+                        pontuacoes_validas.append(valor_numeric)
+                except:
+                    pass
+
+        # Se houver menos de 5, descarta todas
+        if len(pontuacoes_validas) == 0:
+            return 0
+        elif len(pontuacoes_validas) <= 5:
+            return sum(sorted(pontuacoes_validas))
+        else:
+            # Ordena e pega as 5 menores
+            return sum(sorted(pontuacoes_validas)[:5])
+
+    # --- Função para identificar quais colunas foram descartadas ---
+    def identificar_colunas_descartadas(row):
+        pontuacoes_com_coluna = []
+        
+        for col in colunas_pontuacao:
+            if col in row.index:
+                try:
+                    valor = row[col]
+                    valor_numeric = pd.to_numeric(valor, errors='coerce')
+                    # Apenas valores > 0 são válidos para descarte
+                    if pd.notna(valor_numeric) and valor_numeric > 0:
+                        pontuacoes_com_coluna.append((valor_numeric, col))
+                except:
+                    pass
+        
+        # Ordena por valor (crescente) - as menores primeiro
+        pontuacoes_com_coluna = sorted(pontuacoes_com_coluna, key=lambda x: x[0])
+
+        if len(pontuacoes_com_coluna) <= 5:
+            return [col for _, col in pontuacoes_com_coluna]
+        else:
+            # Retorna as 5 menores
+            return [col for _, col in pontuacoes_com_coluna[:5]]
+
+        # Calcula descartes e colunas descartadas ANTES de criar a função de estilo
+    df_com_descarte['Descarte'] = df_com_descarte.apply(calcular_descartes, axis=1).astype(int)
+    # Criar dicionário piloto -> colunas descartadas ANTES de ordenar
+    descartes_por_piloto = {}
+    for idx, row in df_com_descarte.iterrows():
+        piloto = row['Piloto']
+        colunas_descartadas = identificar_colunas_descartadas(row)
+        descartes_por_piloto[piloto] = colunas_descartadas
+        
+        # DEBUG: Para verificar o que está sendo descartado (remova depois)
+        if piloto == 'Enzo Elias':  # ou outro piloto problemático
+            valores_descartados = [row[col] for col in colunas_descartadas if col in row.index]
+            print(f"Piloto: {piloto}")
+            print(f"Colunas descartadas: {colunas_descartadas}")
+            print(f"Valores descartados: {valores_descartados}")
+            print(f"Descarte calculado: {df_com_descarte.loc[idx, 'Descarte']}")
+    
+    # Criar dicionário piloto -> colunas descartadas ANTES de ordenar
+    descartes_por_piloto = {}
+    for idx, row in df_com_descarte.iterrows():
+        piloto = row['Piloto']
+        descartes_por_piloto[piloto] = identificar_colunas_descartadas(row)
+    
+    # Calcular soma com descarte
+    df_com_descarte['Soma_Com_Descarte'] = (df_com_descarte['Soma'] - df_com_descarte['Descarte']).astype(int)
+    
+    # Ordenar por Soma_Com_Descarte
+    df_com_descarte = df_com_descarte.sort_values(by='Soma_Com_Descarte', ascending=False).reset_index(drop=True)
+    
+    # Recalcular posição baseada na nova ordenação
+    df_com_descarte['Posição'] = range(1, len(df_com_descarte) + 1)
+    
+    # Reordenar colunas para manter a ordem original
+    colunas_ordenadas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', 'Soma_Com_Descarte']
+    colunas_restantes = [c for c in df_com_descarte.columns if c not in colunas_ordenadas + colunas_pontuacao]
+    df_com_descarte = df_com_descarte[colunas_ordenadas + colunas_pontuacao + colunas_restantes]
+
+    # --- Função de estilo ---
+    def estilo_completo(row):
+        color_map = {
+            'Gabriel Casagrande': 'background-color: purple; color: white;',
+            'Lucas Foresti': 'background-color: gray; color: white;',
+            'Cesar Ramos': 'background-color: yellow; color: black;',
+            'Thiago Camilo': 'background-color: red; color: white;',
+            'Helio Castroneves': 'background-color: green; color: white;'
+        }
+        cor_base = color_map.get(row['Piloto'], '')
+        colunas_descartadas = descartes_por_piloto.get(row['Piloto'], [])
+
+        styles = [cor_base] * len(row)
+        # Usar row.index ao invés de df_com_descarte.columns para garantir que estamos iterando sobre as colunas corretas
+        for i, col in enumerate(row.index):
+            if col in colunas_pontuacao and col in colunas_descartadas:
+                styles[i] = (cor_base + ' border: 2px solid red;') if cor_base else 'background-color: #ffcccc; color: black;'
+        return styles
+    
+    # Aplicar estilo
+    df_com_descarte_styled = df_com_descarte.set_index('Posição').style.apply(estilo_completo, axis=1)
+    st.dataframe(df_com_descarte_styled, use_container_width=True)
+
 
 with tabs[1]:
     # Passo 6: Agrupar por equipe e somar as pontuações
