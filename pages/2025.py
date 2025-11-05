@@ -389,7 +389,16 @@ with tabs[0]:
 
     # ========== NOVA TABELA COM DESCARTES ==========
     st.write("---")
-    st.write("### Tabela de Pontuação do Campeonato - COM DESCARTES")
+    st.markdown("""
+    <div style='text-align: center; margin-bottom: 20px;'>
+        <h2 style='color: #f7fafc; font-size: 28px; font-weight: 700; margin-bottom: 5px;'>
+            🏁 Classificação com Descarte de Pontuações
+        </h2>
+        <p style='color: #a0aec0; font-size: 14px; margin-top: 5px;'>
+            Classificação final após descartar as 5 menores pontuações de cada piloto
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     df_com_descarte = df.reset_index()
 
@@ -397,19 +406,50 @@ with tabs[0]:
     if 'Posição' not in df_com_descarte.columns:
         df_com_descarte.insert(0, 'Posição', range(1, len(df_com_descarte) + 1))
 
-    # Listar colunas de pontuação (corridas anteriores à última)
+    # Listar colunas de pontuação (corridas de 1 até ultima_corrida)
     colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
 
+    # Criar dicionário para identificar quais colunas eram "EXC" antes das transformações
+    # Usar o DataFrame original para identificar EXC
+    df_original_para_exc = df_original_para_descartes.copy()
+    exc_por_piloto = {}  # piloto -> conjunto de colunas que eram EXC
+    
+    for idx, row in df_original_para_exc.iterrows():
+        piloto = row['Piloto']
+        colunas_exc = set()
+        
+        for col in colunas_pontuacao:
+            if col in row.index:
+                valor = row[col]
+                # Verificar se era EXC (antes das transformações)
+                if isinstance(valor, str) and valor.strip().upper() == "EXC":
+                    colunas_exc.add(col)
+                elif pd.isna(valor):
+                    # Se era NaN, pode ter sido EXC ou DSC, mas vamos verificar
+                    # Na verdade, vamos considerar apenas se for explicitamente "EXC"
+                    pass
+        
+        exc_por_piloto[piloto] = colunas_exc
+
     def calcular_descartes(row):
+        piloto = row['Piloto']
+        colunas_exc = exc_por_piloto.get(piloto, set())
         pontuacoes_validas = []
         
         for col in colunas_pontuacao:
             if col in row.index:
+                # Se esta coluna era EXC, não pode ser descartada
+                if col in colunas_exc:
+                    continue
+                    
                 try:
                     valor = row[col]
                     valor_numeric = pd.to_numeric(valor, errors='coerce')
-                    # Apenas valores > 0 são válidos para descarte (ignora 0 e NaN)
-                    if pd.notna(valor_numeric) and valor_numeric > 0:
+                    # Valores > 0 podem ser descartados
+                    # Valores 0 podem ser descartados SE não eram EXC (já filtrado acima)
+                    # NaN não pode ser descartado (já que era DSC)
+                    if pd.notna(valor_numeric) and valor_numeric >= 0:
+                        # Incluir valores >= 0 (incluindo 0 que era NC ou NP)
                         pontuacoes_validas.append(valor_numeric)
                 except:
                     pass
@@ -418,22 +458,28 @@ with tabs[0]:
         if len(pontuacoes_validas) == 0:
             return 0
         elif len(pontuacoes_validas) <= 5:
-            return sum(sorted(pontuacoes_validas))
+            return sum(sorted(pontuacoes_validas)[:5])
         else:
             # Ordena e pega as 5 menores
             return sum(sorted(pontuacoes_validas)[:5])
 
     # --- Função para identificar quais colunas foram descartadas ---
     def identificar_colunas_descartadas(row):
+        piloto = row['Piloto']
+        colunas_exc = exc_por_piloto.get(piloto, set())
         pontuacoes_com_coluna = []
         
         for col in colunas_pontuacao:
             if col in row.index:
+                # Se esta coluna era EXC, não pode ser descartada
+                if col in colunas_exc:
+                    continue
+                    
                 try:
                     valor = row[col]
                     valor_numeric = pd.to_numeric(valor, errors='coerce')
-                    # Apenas valores > 0 são válidos para descarte
-                    if pd.notna(valor_numeric) and valor_numeric > 0:
+                    # Valores >= 0 podem ser descartados (incluindo 0 que era NC ou NP)
+                    if pd.notna(valor_numeric) and valor_numeric >= 0:
                         pontuacoes_com_coluna.append((valor_numeric, col))
                 except:
                     pass
@@ -447,22 +493,8 @@ with tabs[0]:
             # Retorna as 5 menores
             return [col for _, col in pontuacoes_com_coluna[:5]]
 
-        # Calcula descartes e colunas descartadas ANTES de criar a função de estilo
+    # Calcula descartes e colunas descartadas ANTES de criar a função de estilo
     df_com_descarte['Descarte'] = df_com_descarte.apply(calcular_descartes, axis=1).astype(int)
-    # Criar dicionário piloto -> colunas descartadas ANTES de ordenar
-    descartes_por_piloto = {}
-    for idx, row in df_com_descarte.iterrows():
-        piloto = row['Piloto']
-        colunas_descartadas = identificar_colunas_descartadas(row)
-        descartes_por_piloto[piloto] = colunas_descartadas
-        
-        # DEBUG: Para verificar o que está sendo descartado (remova depois)
-        if piloto == 'Enzo Elias':  # ou outro piloto problemático
-            valores_descartados = [row[col] for col in colunas_descartadas if col in row.index]
-            print(f"Piloto: {piloto}")
-            print(f"Colunas descartadas: {colunas_descartadas}")
-            print(f"Valores descartados: {valores_descartados}")
-            print(f"Descarte calculado: {df_com_descarte.loc[idx, 'Descarte']}")
     
     # Criar dicionário piloto -> colunas descartadas ANTES de ordenar
     descartes_por_piloto = {}
@@ -473,39 +505,131 @@ with tabs[0]:
     # Calcular soma com descarte
     df_com_descarte['Soma_Com_Descarte'] = (df_com_descarte['Soma'] - df_com_descarte['Descarte']).astype(int)
     
-    # Ordenar por Soma_Com_Descarte
-    df_com_descarte = df_com_descarte.sort_values(by='Soma_Com_Descarte', ascending=False).reset_index(drop=True)
+    # Renomear coluna para título mais apresentável ANTES de ordenar
+    df_com_descarte = df_com_descarte.rename(columns={'Soma_Com_Descarte': 'Pontuação Final'})
+    
+    # Ordenar por Pontuação Final
+    df_com_descarte = df_com_descarte.sort_values(by='Pontuação Final', ascending=False).reset_index(drop=True)
     
     # Recalcular posição baseada na nova ordenação
     df_com_descarte['Posição'] = range(1, len(df_com_descarte) + 1)
     
     # Reordenar colunas para manter a ordem original
-    colunas_ordenadas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', 'Soma_Com_Descarte']
+    colunas_ordenadas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', 'Pontuação Final', 'Descarte']
     colunas_restantes = [c for c in df_com_descarte.columns if c not in colunas_ordenadas + colunas_pontuacao]
     df_com_descarte = df_com_descarte[colunas_ordenadas + colunas_pontuacao + colunas_restantes]
 
-    # --- Função de estilo ---
+    # --- Função de estilo corrigida - sem gradientes, destaque claro nos descartes ---
     def estilo_completo(row):
+        # Cores profissionais para pilotos com fundo escuro
         color_map = {
-            'Gabriel Casagrande': 'background-color: purple; color: white;',
-            'Lucas Foresti': 'background-color: gray; color: white;',
-            'Cesar Ramos': 'background-color: yellow; color: black;',
-            'Thiago Camilo': 'background-color: red; color: white;',
-            'Helio Castroneves': 'background-color: green; color: white;'
+            'Gabriel Casagrande': 'background-color: #7B68EE; color: white; font-weight: 700;',
+            'Lucas Foresti': 'background-color: #778899; color: white; font-weight: 700;',
+            'Cesar Ramos': 'background-color: #FFA500; color: #1a1a1a; font-weight: 700;',
+            'Thiago Camilo': 'background-color: #DC143C; color: white; font-weight: 700;',
+            'Helio Castroneves': 'background-color: #32CD32; color: white; font-weight: 700;'
         }
-        cor_base = color_map.get(row['Piloto'], '')
+        # Fundo escuro padrão para linhas sem cor específica
+        cor_base = color_map.get(row['Piloto'], 'background-color: #2d3748; color: #e2e8f0; font-weight: 500;')
         colunas_descartadas = descartes_por_piloto.get(row['Piloto'], [])
 
-        styles = [cor_base] * len(row)
-        # Usar row.index ao invés de df_com_descarte.columns para garantir que estamos iterando sobre as colunas corretas
+        styles = []
+        
+        # Aplicar estilo para cada coluna
         for i, col in enumerate(row.index):
+            # Destaque especial para colunas de pontuação descartadas - SEMPRE vermelho brilhante
             if col in colunas_pontuacao and col in colunas_descartadas:
-                styles[i] = (cor_base + ' border: 2px solid red;') if cor_base else 'background-color: #ffcccc; color: black;'
+                # Estilo vermelho sólido e vibrante para descartes - sem gradiente
+                style = 'background-color: #ff4444; color: white; font-weight: 900; border: 3px solid #ff0000; box-shadow: 0 0 10px rgba(255, 0, 0, 0.8); text-align: center;'
+            
+            # Destaque para colunas importantes (Soma, Pontuação Final, Descarte)
+            elif col in ['Soma', 'Pontuação Final', 'Descarte']:
+                if col == 'Pontuação Final':
+                    style = 'background-color: #1e3a1e; color: #4CAF50; font-weight: 800; border-left: 5px solid #4CAF50; border-right: 5px solid #4CAF50; text-align: center; vertical-align: middle;'
+                elif col == 'Descarte':
+                    style = 'background-color: #3d2817; color: #ff9800; font-weight: 700; border-left: 5px solid #ff9800; text-align: center; vertical-align: middle;'
+                else:
+                    style = 'background-color: #1a1f3d; color: #2196F3; font-weight: 700; border-left: 5px solid #2196F3; text-align: center; vertical-align: middle;'
+            
+            # Colunas de informação e pontuação normais - usar cor base
+            else:
+                style = cor_base + ' text-align: center; vertical-align: middle;'
+            
+            styles.append(style)
+        
         return styles
     
-    # Aplicar estilo
-    df_com_descarte_styled = df_com_descarte.set_index('Posição').style.apply(estilo_completo, axis=1)
-    st.dataframe(df_com_descarte_styled, use_container_width=True)
+    # Aplicar estilo com formatação adicional e tema escuro
+    df_com_descarte_styled = (df_com_descarte.set_index('Posição')
+                              .style
+                              .apply(estilo_completo, axis=1)
+                              .format({
+                                  'Soma': '{:,.0f}',
+                                  'Pontuação Final': '{:,.0f}',
+                                  'Descarte': '{:,.0f}'
+                              }, na_rep='')
+                              .set_properties(**{
+                                  'text-align': 'center',
+                                  'vertical-align': 'middle',
+                                  'font-size': '13px',
+                                  'padding': '10px 12px'
+                              })
+                              .set_properties(**{
+                                  'text-align': 'center',
+                                  'vertical-align': 'middle'
+                              }, subset=['Pontuação Final', 'Soma', 'Descarte'])
+                              .set_table_styles([
+                                  {
+                                      'selector': 'th',
+                                      'props': [
+                                          ('background-color', '#1a202c'),
+                                          ('color', '#f7fafc'),
+                                          ('font-weight', 'bold'),
+                                          ('text-align', 'center'),
+                                          ('vertical-align', 'middle'),
+                                          ('padding', '14px'),
+                                          ('font-size', '14px'),
+                                          ('border', '2px solid #2d3748'),
+                                          ('text-transform', 'uppercase'),
+                                          ('letter-spacing', '0.5px')
+                                      ]
+                                  },
+                                  {
+                                      'selector': 'td',
+                                      'props': [
+                                          ('border', '1px solid #2d3748'),
+                                          ('transition', 'all 0.2s ease'),
+                                          ('text-align', 'center'),
+                                          ('vertical-align', 'middle')
+                                      ]
+                                  },
+                                  {
+                                      'selector': 'tr:hover',
+                                      'props': [
+                                          ('background-color', '#2d3748'),
+                                          ('cursor', 'pointer')
+                                      ]
+                                  },
+                                  {
+                                      'selector': 'table',
+                                      'props': [
+                                          ('background-color', '#1a202c'),
+                                          ('border-collapse', 'collapse'),
+                                          ('width', '100%')
+                                      ]
+                                  }
+                              ]))
+    # Adicionar uma explicação visual melhorada antes da tabela
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border-left: 5px solid #ff4444; padding: 15px; margin-bottom: 20px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);'>
+        <strong style='color: #f7fafc; font-size: 16px;'>📊 Legenda:</strong> 
+        <span style='color: #e2e8f0;'>Valores destacados em</span> 
+        <span style='background-color: #ff4444; padding: 6px 12px; border-radius: 4px; border: 2px solid #ff0000; font-weight: bold; color: white; box-shadow: 0 0 10px rgba(255, 0, 0, 0.6);'>vermelho</span> 
+        <span style='color: #e2e8f0;'>representam as <strong>5 menores pontuações descartadas</strong> de cada piloto.</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.dataframe(df_com_descarte_styled, use_container_width=True, height=600)
 
 
 with tabs[1]:
