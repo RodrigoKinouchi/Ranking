@@ -70,7 +70,7 @@ df['Modelo'] = df['Modelo'].map(modelo_map)
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
-    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=17, step=1)
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=19, step=1)
 
 # Substitui "." (etapas futuras) por NaN
 df.iloc[:, 6:ultima_corrida+5] = df.iloc[:, 6:ultima_corrida+5].replace(".", pd.NA)
@@ -984,9 +984,9 @@ with tabs[5]:
 
             resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
 
-        # Adiciona +2 pontos para Mitsubishi pole 2 etapa e 6 etapa
-        if 'Mitsubishi' in resultado_campeonato:
-            resultado_campeonato['Mitsubishi'] += 0
+        # Adiciona +2 pontos Chevrolet por conta do erro do Helinho ser GR na tabela
+        if 'Crevolet' in resultado_campeonato:
+            resultado_campeonato['Crevolet'] += 2
 
         df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
             'Modelo', 'Pontuação Atual'
