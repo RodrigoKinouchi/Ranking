@@ -70,10 +70,16 @@ df['Modelo'] = df['Modelo'].map(modelo_map)
 
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
-    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=21, step=1)
+    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=23, step=1)
+
+# Identifica as colunas de corridas pelo nome (para uso consistente em todo o código)
+# Garante que "Descarte" não seja incluída mesmo que exista no DataFrame
+colunas_corridas_nomes = [str(i) for i in range(1, ultima_corrida + 1)]
+# Remove "Descarte" caso esteja na lista (não deveria estar, mas por segurança)
+colunas_corridas_nomes = [col for col in colunas_corridas_nomes if col != "Descarte"]
 
 # Substitui "." (etapas futuras) por NaN
-df.iloc[:, 6:ultima_corrida+5] = df.iloc[:, 6:ultima_corrida+5].replace(".", pd.NA)
+df[colunas_corridas_nomes] = df[colunas_corridas_nomes].replace(".", pd.NA)
 
 # Criar o DataFrame para contabilizar os motivos de abandono
 df_abandonos = pd.DataFrame(columns=["Piloto", "NC", "EXC", "DSC", "NP"])
@@ -89,15 +95,17 @@ for _, row in df.iterrows():
     dsc_count = 0
     np_count = 0
 
-    for score in row[6:ultima_corrida+6]:
-        if score == "NC":
-            nc_count += 1
-        elif score == "EXC":
-            exc_count += 1
-        elif score == "DSC":
-            dsc_count += 1
-        elif pd.isna(score) or score in ["", "NP", "."]:
-            np_count += 1
+    for col in colunas_corridas_nomes:
+        if col in row.index:
+            score = row[col]
+            if score == "NC":
+                nc_count += 1
+            elif score == "EXC":
+                exc_count += 1
+            elif score == "DSC":
+                dsc_count += 1
+            elif pd.isna(score) or score in ["", "NP", "."]:
+                np_count += 1
 
     abandonos_data.append({
         "Piloto": piloto,
@@ -111,37 +119,94 @@ df_abandonos = pd.DataFrame(abandonos_data)
 df_original_para_descartes = df.copy()
 
 # Substituições para facilitar os cálculos
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].replace({
+df[colunas_corridas_nomes] = df[colunas_corridas_nomes].replace({
     "NC": 0,         # NC conta como zero ponto
     "DSC": pd.NA,    # DSC desconsidera da pontuação
     "EXC": pd.NA     # EXC também
 })
 
 # Converte os valores para numérico (forçando NaN onde necessário)
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].apply(
+df[colunas_corridas_nomes] = df[colunas_corridas_nomes].apply(
     pd.to_numeric, errors='coerce'
 )
 
 # Calcula o descarte das duas menores pontuações válidas
-#def calcular_descarte(row):
-    #pontuacoes_validas = row[6:ultima_corrida+6].dropna()
-    #if len(pontuacoes_validas) > 1:
-        #return pontuacoes_validas.nsmallest(2).sum()
-    #return 0
+# Primeiro, cria um dicionário para identificar quais colunas eram DSC no DataFrame original
+dsc_por_indice = {}  # índice -> conjunto de colunas que eram DSC
 
-#df['Descarte'] = df.apply(calcular_descarte, axis=1).round(0).astype(int)
+for idx, row_original in df_original_para_descartes.iterrows():
+    colunas_dsc = set()
+    
+    for col in colunas_corridas_nomes:
+        if col in row_original.index:
+            valor = row_original[col]
+            # Verifica se era DSC
+            if isinstance(valor, str) and valor.strip().upper() == "DSC":
+                colunas_dsc.add(col)
+    
+    dsc_por_indice[idx] = colunas_dsc
+
+# Identifica as últimas 2 corridas (não podem ser descartadas)
+ultimas_2_corridas_descarte = {str(ultima_corrida - 1), str(ultima_corrida)} if ultima_corrida >= 2 else set()
+
+def calcular_descarte(row):
+    # Obtém o índice da linha atual
+    row_idx = row.name
+    
+    # Identifica colunas que eram DSC (não podem ser descartadas)
+    colunas_dsc = dsc_por_indice.get(row_idx, set())
+    
+    # Coleta pontuações válidas com suas colunas correspondentes
+    pontuacoes_com_coluna = []
+    
+    # Itera pelas colunas de corridas
+    for col in colunas_corridas_nomes:
+        if col in row.index:
+            # Não pode descartar se era DSC
+            if col in colunas_dsc:
+                continue
+            
+            # Não pode descartar as últimas 2 corridas
+            if col in ultimas_2_corridas_descarte:
+                continue
+            
+            # Pega o valor (ainda pode ser NaN se era DSC ou EXC)
+            valor = row[col]
+            
+            # Converte para numérico
+            valor_numeric = pd.to_numeric(valor, errors='coerce')
+            
+            # Só considera valores numéricos válidos (não NaN)
+            if pd.notna(valor_numeric) and valor_numeric >= 0:
+                pontuacoes_com_coluna.append((valor_numeric, col))
+    
+    # Se houver menos de 2 pontuações válidas, não descarta nada
+    if len(pontuacoes_com_coluna) < 2:
+        return 0
+    
+    # Ordena por valor (menor primeiro) e pega as 2 menores
+    pontuacoes_com_coluna.sort(key=lambda x: x[0])
+    descarte = sum([valor for valor, _ in pontuacoes_com_coluna[:2]])
+    
+    return descarte
+
+# Aplicando a função de descarte ANTES de substituir NaN por 0
+df['Descarte'] = df.apply(calcular_descarte, axis=1)
+df['Descarte'] = df['Descarte'].round(0).astype(int)
 
 # Substitui NaN restantes por 0 para soma
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].fillna(0)
+df[colunas_corridas_nomes] = df[colunas_corridas_nomes].fillna(0)
 
-# Soma de todas as pontuações
-df['Soma'] = df.iloc[:, 6:ultima_corrida+6].sum(axis=1).round(0).astype(int)
+# Soma de todas as pontuações usando os nomes das colunas
+# Garante que só estamos somando colunas que realmente existem e são corridas (não "Descarte")
+colunas_corridas_validas = [col for col in colunas_corridas_nomes if col in df.columns and col != "Descarte"]
+df['Soma'] = df[colunas_corridas_validas].sum(axis=1).round(0).astype(int)
 
-# Subtrai o descarte da soma total
+# Subtrai o descarte da soma total para obter a pontuação final
 #df['Soma'] = (df['Soma'] - df['Descarte']).round(0).astype(int)
 
 # Garante que o tipo é numérico inteiro (evita erros em plotagens e análises futuras)
-df.iloc[:, 6:ultima_corrida+6] = df.iloc[:, 6:ultima_corrida+6].astype(int)
+df[colunas_corridas_nomes] = df[colunas_corridas_nomes].astype(int)
 
 
 mapa_corridas = {
@@ -409,14 +474,16 @@ with tabs[0]:
     # Listar colunas de pontuação (corridas de 1 até ultima_corrida)
     colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
 
-    # Criar dicionário para identificar quais colunas eram "EXC" antes das transformações
-    # Usar o DataFrame original para identificar EXC
+    # Criar dicionário para identificar quais colunas eram "EXC" e "DSC" antes das transformações
+    # Usar o DataFrame original para identificar EXC e DSC
     df_original_para_exc = df_original_para_descartes.copy()
     exc_por_piloto = {}  # piloto -> conjunto de colunas que eram EXC
+    dsc_por_piloto = {}  # piloto -> conjunto de colunas que eram DSC
     
     for idx, row in df_original_para_exc.iterrows():
         piloto = row['Piloto']
         colunas_exc = set()
+        colunas_dsc = set()
         
         for col in colunas_pontuacao:
             if col in row.index:
@@ -424,16 +491,20 @@ with tabs[0]:
                 # Verificar se era EXC (antes das transformações)
                 if isinstance(valor, str) and valor.strip().upper() == "EXC":
                     colunas_exc.add(col)
-                elif pd.isna(valor):
-                    # Se era NaN, pode ter sido EXC ou DSC, mas vamos verificar
-                    # Na verdade, vamos considerar apenas se for explicitamente "EXC"
-                    pass
+                # Verificar se era DSC (antes das transformações)
+                elif isinstance(valor, str) and valor.strip().upper() == "DSC":
+                    colunas_dsc.add(col)
         
         exc_por_piloto[piloto] = colunas_exc
+        dsc_por_piloto[piloto] = colunas_dsc
+
+    # Identificar as últimas 2 corridas (não podem ser descartadas)
+    ultimas_2_corridas = {str(ultima_corrida - 1), str(ultima_corrida)} if ultima_corrida >= 2 else set()
 
     def calcular_descartes(row):
         piloto = row['Piloto']
         colunas_exc = exc_por_piloto.get(piloto, set())
+        colunas_dsc = dsc_por_piloto.get(piloto, set())
         pontuacoes_validas = []
         
         for col in colunas_pontuacao:
@@ -441,13 +512,21 @@ with tabs[0]:
                 # Se esta coluna era EXC, não pode ser descartada
                 if col in colunas_exc:
                     continue
+                
+                # Se esta coluna era DSC, não pode ser descartada
+                if col in colunas_dsc:
+                    continue
+                
+                # Se esta coluna é uma das últimas 2 corridas, não pode ser descartada
+                if col in ultimas_2_corridas:
+                    continue
                     
                 try:
                     valor = row[col]
                     valor_numeric = pd.to_numeric(valor, errors='coerce')
                     # Valores > 0 podem ser descartados
-                    # Valores 0 podem ser descartados SE não eram EXC (já filtrado acima)
-                    # NaN não pode ser descartado (já que era DSC)
+                    # Valores 0 podem ser descartados SE não eram EXC ou DSC (já filtrado acima)
+                    # NaN não pode ser descartado (já que era DSC ou EXC)
                     if pd.notna(valor_numeric) and valor_numeric >= 0:
                         # Incluir valores >= 0 (incluindo 0 que era NC ou NP)
                         pontuacoes_validas.append(valor_numeric)
@@ -467,12 +546,21 @@ with tabs[0]:
     def identificar_colunas_descartadas(row):
         piloto = row['Piloto']
         colunas_exc = exc_por_piloto.get(piloto, set())
+        colunas_dsc = dsc_por_piloto.get(piloto, set())
         pontuacoes_com_coluna = []
         
         for col in colunas_pontuacao:
             if col in row.index:
                 # Se esta coluna era EXC, não pode ser descartada
                 if col in colunas_exc:
+                    continue
+                
+                # Se esta coluna era DSC, não pode ser descartada
+                if col in colunas_dsc:
+                    continue
+                
+                # Se esta coluna é uma das últimas 2 corridas, não pode ser descartada
+                if col in ultimas_2_corridas:
                     continue
                     
                 try:
