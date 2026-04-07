@@ -112,13 +112,19 @@ for _, row in df.iterrows():
     for col in colunas_corridas_nomes:
         if col in row.index:
             score = row[col]
-            if score == "NC":
+            if pd.isna(score):
+                np_count += 1
+                continue
+
+            score_texto = str(score).strip().upper()
+
+            if score_texto == "NC":
                 nc_count += 1
-            elif score == "EXC":
+            elif score_texto == "EXC":
                 exc_count += 1
-            elif score == "DSC":
+            elif score_texto == "DSC":
                 dsc_count += 1
-            elif pd.isna(score) or score in ["", "NP", "."]:
+            elif score_texto in ["", "NP", "."]:
                 np_count += 1
 
     abandonos_data.append({
