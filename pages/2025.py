@@ -1,4 +1,4 @@
-from season_loader import render_temporada
+from pages.season_loader import render_temporada
 import streamlit as st
 
 
