@@ -72,6 +72,10 @@ df = df.drop(index=0)
 df["Piloto"] = df["Piloto"].str.title()
 df["Equipe"] = df["Equipe"].str.title()
 
+# Colunas extras do PDF (ex.: layout além do cabeçalho fixo). Não exibir nem usar em estatísticas.
+colunas_extras_pdf = [c for c in df.columns if str(c).startswith("extra_")]
+df = df.drop(columns=colunas_extras_pdf, errors="ignore")
+
 modelo_map = {
     'Q': 'Mitsubishi',
     'A': 'Crevrolet',
@@ -710,31 +714,27 @@ with tabs[0]:
 
 
 with tabs[1]:
-    # Passo 6: Agrupar por equipe e somar as pontuações
-    colunas_pontuacao = df.columns[5:29].tolist()
+    # Soma por equipe só nas colunas de corrida (evita somar "Soma" do PDF, extra_*, Descarte, etc.)
+    colunas_so_corridas_equipe = [
+        str(i) for i in range(1, ultima_corrida + 1) if str(i) in df.columns
+    ]
+    df_equipes = df.groupby('Equipe', as_index=False)[colunas_so_corridas_equipe].sum()
+    df_equipes[colunas_so_corridas_equipe] = df_equipes[colunas_so_corridas_equipe].apply(
+        pd.to_numeric, errors='coerce'
+    )
+    df_equipes['Soma'] = df_equipes[colunas_so_corridas_equipe].sum(axis=1).round(0).astype(int)
 
-    # Garantir que as colunas sejam numéricas
-    df[colunas_pontuacao] = df[colunas_pontuacao].apply(pd.to_numeric, errors='coerce')
-
-    # Agrupar por equipe e somar as pontuações
-    df_equipes = df.groupby('Equipe')[colunas_pontuacao].sum().reset_index()
-
-    # Criar a coluna "Soma" com a soma das pontuações de cada equipe
-    df_equipes['Soma'] = df_equipes[colunas_pontuacao].sum(axis=1)
-
-    # Ordenar pela soma
     df_equipes_sorted = df_equipes.sort_values(by='Soma', ascending=False).reset_index(drop=True)
+    df_equipes_sorted['Posição'] = df_equipes_sorted['Soma'].rank(
+        ascending=False, method='min'
+    ).astype(int)
 
-    # Arredondar e converter
-    df_equipes_sorted['Soma'] = df_equipes_sorted['Soma'].round(0).astype(int)
-    df_equipes_sorted['Descarte'] = df_equipes_sorted['Descarte'].round(0).astype(int)
-
-    # Adicionar a coluna de posição
-    df_equipes_sorted['Posição'] = df_equipes_sorted['Soma'].rank(ascending=False, method='min').astype(int)
-
-    # Reordenar as colunas
-    colunas = ['Posição'] + [col for col in df_equipes_sorted.columns if col != 'Posição']
-    df_equipes_sorted = df_equipes_sorted[colunas]
+    # Posição, Equipe, Soma, depois as corridas
+    colunas_equipes_ordem = (
+        ['Posição', 'Equipe', 'Soma'] +
+        [c for c in colunas_so_corridas_equipe if c in df_equipes_sorted.columns]
+    )
+    df_equipes_sorted = df_equipes_sorted[colunas_equipes_ordem]
 
     # Garantir índice único para estilização
     df_equipes_sorted = df_equipes_sorted.reset_index(drop=True)
