@@ -7,7 +7,7 @@ TEMPLATE_MARKER = "# === TEMPLATE START ==="
 def _customizar_source_2026(source: str) -> str:
     source = source.replace(
         'st.number_input(\n    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=23, step=1)',
-        'st.number_input(\n    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=4, step=1)'
+        'st.number_input(\n    "Última corrida disputada (1ª, 2ª, … — não é o nº da coluna do PDF)", min_value=1, max_value=24, value=4, step=1)'
     )
     source = source.replace(
         "MODO_COLUNAS_2026 = False",

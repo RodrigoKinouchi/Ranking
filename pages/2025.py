@@ -90,36 +90,54 @@ modelo_map = {
 df['Modelo'] = df['Modelo'].map(modelo_map)
 
 
+def _ultimo_indice_coluna_pdf_2026(numero_ultima_corrida: int) -> int:
+    """
+    Número da última corrida disputada no campeonato (1ª, 2ª, …) → maior índice de
+    coluna usado no PDF (blocos pole + sprint + principal). Automatiza o que antes
+    era “somar +2, +3…” no input.
+    """
+    if numero_ultima_corrida <= 0:
+        return 0
+    pares_completos = numero_ultima_corrida // 2
+    resto = numero_ultima_corrida % 2
+    return 3 * pares_completos + (2 if resto == 1 else 0)
+
+
 # Input do usuário para a última corrida
 ultima_corrida = st.number_input(
     "Informe o número da última corrida realizada", min_value=1, max_value=24, value=23, step=1)
 
-# Identifica as colunas de corridas pelo nome (para uso consistente em todo o código)
-# Garante que "Descarte" não seja incluída mesmo que exista no DataFrame
-colunas_corridas_nomes = [str(i) for i in range(1, ultima_corrida + 1)]
-# Remove "Descarte" caso esteja na lista (não deveria estar, mas por segurança)
+# Colunas numéricas do PDF usadas no processamento (2026: derivado da última corrida)
+if MODO_COLUNAS_2026:
+    _limite_col_pdf = _ultimo_indice_coluna_pdf_2026(ultima_corrida)
+    colunas_corridas_nomes = [str(i) for i in range(1, _limite_col_pdf + 1)]
+else:
+    colunas_corridas_nomes = [str(i) for i in range(1, ultima_corrida + 1)]
 colunas_corridas_nomes = [col for col in colunas_corridas_nomes if col != "Descarte"]
 
+for _c_pad in colunas_corridas_nomes:
+    if _c_pad not in df.columns:
+        df[_c_pad] = pd.NA
 
-def _maior_indice_coluna_numerica() -> int:
-    num = [int(c) for c in df.columns if str(c).isdigit()]
-    return max(num) if num else 0
+
+def _indice_limite_colunas_pdf() -> int:
+    """Maior índice de coluna numérica considerado (alinha 2025 e 2026)."""
+    if MODO_COLUNAS_2026:
+        return _ultimo_indice_coluna_pdf_2026(ultima_corrida)
+    return ultima_corrida
 
 
 def _colunas_pole_pdf() -> set[str]:
-    """Colunas de pole no PDF 2026: índices 1, 4, 7, … até o fim do quadro."""
+    """Colunas de pole no PDF 2026: índices 1, 4, 7, … até o limite ativo."""
     if not MODO_COLUNAS_2026:
         return set()
-    m = _maior_indice_coluna_numerica()
+    m = _indice_limite_colunas_pdf()
     return {str(1 + 3 * k) for k in range(m + 1) if (1 + 3 * k) <= m}
 
 
 def _num_corridas_logico() -> int:
-    """Quantas corridas (sprint+principal) existem; no 2026: 2 por bloco de 3 colunas."""
-    if not MODO_COLUNAS_2026:
-        return ultima_corrida
-    m = _maior_indice_coluna_numerica()
-    return 2 * (m // 3)
+    """Número de corridas (sprint/principal) no campeonato; no 2026 = valor do input."""
+    return ultima_corrida
 
 
 def _coluna_pdf_para_corrida_logica(n_logico: int) -> str:
@@ -206,8 +224,20 @@ for idx, row_original in df_original_para_descartes.iterrows():
     
     dsc_por_indice[idx] = colunas_dsc
 
-# Identifica as últimas 2 corridas (não podem ser descartadas)
-ultimas_2_corridas_descarte = {str(ultima_corrida - 1), str(ultima_corrida)} if ultima_corrida >= 2 else set()
+# Identifica as últimas 2 corridas (não podem ser descartadas) — nomes de coluna no PDF
+if ultima_corrida >= 2:
+    if MODO_COLUNAS_2026:
+        ultimas_2_corridas_descarte = {
+            _coluna_pdf_para_corrida_logica(ultima_corrida - 1),
+            _coluna_pdf_para_corrida_logica(ultima_corrida),
+        }
+    else:
+        ultimas_2_corridas_descarte = {
+            str(ultima_corrida - 1),
+            str(ultima_corrida),
+        }
+else:
+    ultimas_2_corridas_descarte = set()
 
 def calcular_descarte(row):
     # Obtém o índice da linha atual
@@ -291,7 +321,7 @@ colunas_corridas = [col for col in colunas_corridas_nomes if col in df.columns]
 corridas_sprint = [col for col in colunas_corridas if int(col) % 2 != 0]
 corridas_principal = [col for col in colunas_corridas if int(col) % 2 == 0]
 if MODO_COLUNAS_2026:
-    m = _maior_indice_coluna_numerica()
+    m = _indice_limite_colunas_pdf()
     corridas_sprint = [
         str(2 + 3 * k)
         for k in range(24)
@@ -526,8 +556,14 @@ with tabs[0]:
     if 'Posição' not in df_com_descarte.columns:
         df_com_descarte.insert(0, 'Posição', range(1, len(df_com_descarte) + 1))
 
-    # Listar colunas de pontuação (corridas de 1 até ultima_corrida)
-    colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
+    # Listar colunas de pontuação (corridas 1 … última-1), com nomes reais no PDF em 2026
+    if MODO_COLUNAS_2026:
+        colunas_pontuacao = [
+            _coluna_pdf_para_corrida_logica(i)
+            for i in range(1, ultima_corrida)
+        ]
+    else:
+        colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
 
     # Criar dicionário para identificar quais colunas eram "EXC" e "DSC" antes das transformações
     # Usar o DataFrame original para identificar EXC e DSC
@@ -553,8 +589,19 @@ with tabs[0]:
         exc_por_piloto[piloto] = colunas_exc
         dsc_por_piloto[piloto] = colunas_dsc
 
-    # Identificar as últimas 2 corridas (não podem ser descartadas)
-    ultimas_2_corridas = {str(ultima_corrida - 1), str(ultima_corrida)} if ultima_corrida >= 2 else set()
+    if ultima_corrida >= 2:
+        if MODO_COLUNAS_2026:
+            ultimas_2_corridas = {
+                _coluna_pdf_para_corrida_logica(ultima_corrida - 1),
+                _coluna_pdf_para_corrida_logica(ultima_corrida),
+            }
+        else:
+            ultimas_2_corridas = {
+                str(ultima_corrida - 1),
+                str(ultima_corrida),
+            }
+    else:
+        ultimas_2_corridas = set()
 
     def calcular_descartes(row):
         piloto = row['Piloto']
@@ -779,7 +826,7 @@ with tabs[0]:
 with tabs[1]:
     # Soma por equipe só nas colunas de corrida (evita somar "Soma" do PDF, extra_*, Descarte, etc.)
     colunas_so_corridas_equipe = [
-        str(i) for i in range(1, ultima_corrida + 1) if str(i) in df.columns
+        c for c in colunas_corridas_nomes if c in df.columns
     ]
     df_equipes = df.groupby('Equipe', as_index=False)[colunas_so_corridas_equipe].sum()
     df_equipes[colunas_so_corridas_equipe] = df_equipes[colunas_so_corridas_equipe].apply(
