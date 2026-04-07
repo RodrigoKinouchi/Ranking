@@ -61,7 +61,7 @@ st.title("AMM Statistics")
 st.subheader("Selecione uma das opções no menu localizado ao lado esquerdo para começar")
 
 st.markdown("""
-Este aplicativo traz uma visualização das estatísticas do campeonato 2024 e 2025 da Stock Car Brasil. 
+Este aplicativo traz uma visualização das estatísticas do campeonato 2024, 2025 e 2026 da Stock Car Brasil. 
 Navegue nas informações através das abas e insira o número da última corrida para atualizar os cálculos.
 """)
 

@@ -1,6 +1,13 @@
+from season_loader import render_temporada
+import streamlit as st
+
+
+render_temporada(2025)
+st.stop()
+
+# === TEMPLATE START ===
 import pdfplumber
 import pandas as pd
-import streamlit as st
 import plotly.express as px
 from PIL import Image
 import plotly.graph_objs as go
