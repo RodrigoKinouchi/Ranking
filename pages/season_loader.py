@@ -9,32 +9,12 @@ def _customizar_source_2026(source: str) -> str:
         'st.number_input(\n    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=23, step=1)',
         'st.number_input(\n    "Informe o número da última corrida realizada", min_value=1, max_value=24, value=4, step=1)'
     )
-
-    ancora = 'df["Equipe"] = df["Equipe"].str.title()'
-    injecao = """
-
-# Ajuste exclusivo 2026:
-# remover colunas de pole position (1a e 4a colunas de corrida apos "Modelo").
-colunas_numericas_ordenadas = sorted(
-    [c for c in df.columns if str(c).isdigit()],
-    key=lambda x: int(x)
-)
-if len(colunas_numericas_ordenadas) >= 4:
-    colunas_pole = [colunas_numericas_ordenadas[0], colunas_numericas_ordenadas[3]]
-    df = df.drop(columns=colunas_pole, errors="ignore")
-
-# Reindexa colunas de corrida para manter sequencia continua.
-colunas_numericas_restantes = sorted(
-    [c for c in df.columns if str(c).isdigit()],
-    key=lambda x: int(x)
-)
-renomeio_corridas_2026 = {
-    col: str(i + 1) for i, col in enumerate(colunas_numericas_restantes)
-}
-df = df.rename(columns=renomeio_corridas_2026)
-"""
-
-    return source.replace(ancora, ancora + injecao, 1)
+    source = source.replace(
+        "MODO_COLUNAS_2026 = False",
+        "MODO_COLUNAS_2026 = True",
+        1,
+    )
+    return source
 
 
 def render_temporada(ano: int, template_page: str = "2025.py") -> None:

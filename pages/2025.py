@@ -16,6 +16,10 @@ import matplotlib.pyplot as plt
 import os
 import re
 
+# Temporada 2026: no Streamlit passa a True (substituído em season_loader).
+# PDF com blocos (pole), sprint, principal → colunas 1,2,3,4,5,6… (pole em 1,4,7,…).
+MODO_COLUNAS_2026 = False
+
 
 # Configurando o título da página URL
 st.set_page_config(
@@ -95,6 +99,38 @@ ultima_corrida = st.number_input(
 colunas_corridas_nomes = [str(i) for i in range(1, ultima_corrida + 1)]
 # Remove "Descarte" caso esteja na lista (não deveria estar, mas por segurança)
 colunas_corridas_nomes = [col for col in colunas_corridas_nomes if col != "Descarte"]
+
+
+def _maior_indice_coluna_numerica() -> int:
+    num = [int(c) for c in df.columns if str(c).isdigit()]
+    return max(num) if num else 0
+
+
+def _colunas_pole_pdf() -> set[str]:
+    """Colunas de pole no PDF 2026: índices 1, 4, 7, … até o fim do quadro."""
+    if not MODO_COLUNAS_2026:
+        return set()
+    m = _maior_indice_coluna_numerica()
+    return {str(1 + 3 * k) for k in range(m + 1) if (1 + 3 * k) <= m}
+
+
+def _num_corridas_logico() -> int:
+    """Quantas corridas (sprint+principal) existem; no 2026: 2 por bloco de 3 colunas."""
+    if not MODO_COLUNAS_2026:
+        return ultima_corrida
+    m = _maior_indice_coluna_numerica()
+    return 2 * (m // 3)
+
+
+def _coluna_pdf_para_corrida_logica(n_logico: int) -> str:
+    """Corrida 1,2,3,… (ordem real) → nome da coluna no PDF (ex.: 2,3,5,6)."""
+    if not MODO_COLUNAS_2026:
+        return str(n_logico)
+    w = (n_logico - 1) // 2
+    if n_logico % 2 == 1:
+        return str(2 + 3 * w)
+    return str(3 + 3 * w)
+
 
 # Substitui "." (etapas futuras) por NaN
 df[colunas_corridas_nomes] = df[colunas_corridas_nomes].replace(".", pd.NA)
@@ -250,9 +286,22 @@ pontuacao_principal = {
 # Colunas de corrida sem hardcode de posição no DataFrame.
 colunas_corridas = [col for col in colunas_corridas_nomes if col in df.columns]
 
-# Regra: corridas ímpares = sprint, pares = principal.
+# Regra: corridas ímpares = sprint, pares = principal (2025).
+# 2026: sprint nas colunas 2,5,8,… e principal em 3,6,9,… (após colunas de pole).
 corridas_sprint = [col for col in colunas_corridas if int(col) % 2 != 0]
 corridas_principal = [col for col in colunas_corridas if int(col) % 2 == 0]
+if MODO_COLUNAS_2026:
+    m = _maior_indice_coluna_numerica()
+    corridas_sprint = [
+        str(2 + 3 * k)
+        for k in range(24)
+        if (2 + 3 * k) <= m and str(2 + 3 * k) in df.columns
+    ]
+    corridas_principal = [
+        str(3 + 3 * k)
+        for k in range(24)
+        if (3 + 3 * k) <= m and str(3 + 3 * k) in df.columns
+    ]
 
 # Detecta o valor de vitória por coluna dinamicamente.
 valores_vitoria_por_coluna = {}
@@ -433,16 +482,30 @@ with tabs[0]:
         # Retorna o estilo para cada célula da linha
         return [color] * len(row) if color else [''] * len(row)
 
-    df = df.set_index('Posição')
-    # Aplicando o estilo no DataFrame
-    df_styled = df.style.apply(colorir_piloto, axis=1)
+    df_tabela_visual = df.copy()
+    if MODO_COLUNAS_2026:
+        ocultar = _colunas_pole_pdf()
+        df_tabela_visual = df_tabela_visual.drop(columns=list(ocultar), errors="ignore")
+        cols_vis = sorted(
+            [c for c in df_tabela_visual.columns if str(c).isdigit()],
+            key=lambda x: int(x),
+        )
+        renomear = {c: f"{i}ª" for i, c in enumerate(cols_vis, start=1)}
+        df_tabela_visual = df_tabela_visual.rename(columns=renomear)
 
-    # Passo 3: Exibir a tabela de forma interativa
+    df_tabela_visual = df_tabela_visual.set_index('Posição')
+    df_styled = df_tabela_visual.style.apply(colorir_piloto, axis=1)
+
     st.write("### Tabela de Pontuação do Campeonato")
+    if MODO_COLUNAS_2026:
+        st.caption(
+            "Colunas de pole do PDF (posições 1, 4, 7, …) não aparecem aqui, "
+            "mas entram na coluna Soma."
+        )
 
-    # Exibir a tabela com rolagem apenas vertical
-    # A tabela ocupa toda a largura disponível
     st.dataframe(df_styled, use_container_width=True)
+
+    df = df.set_index('Posição')
 
     # ========== NOVA TABELA COM DESCARTES ==========
     st.write("---")
@@ -951,14 +1014,26 @@ with tabs[3]:
         st.plotly_chart(fig_principal_equipes)
 
 with tabs[4]:
-    # Contar o número total de corridas (colunas de pontuação)
-    # Assumindo que as colunas de pontuação começam na posição 5 até a penúltima
-    df = df.drop(columns=['Descarte'])
-    total_corridas = ultima_corrida
+    if MODO_COLUNAS_2026:
+        _nlog = _num_corridas_logico()
+        cols_consistencia = [
+            _coluna_pdf_para_corrida_logica(i)
+            for i in range(1, _nlog + 1)
+        ]
+        cols_consistencia = [c for c in cols_consistencia if c in df.columns]
+        total_corridas_metrica = _nlog
+    else:
+        cols_consistencia = [
+            str(i) for i in range(1, ultima_corrida + 1) if str(i) in df.columns
+        ]
+        total_corridas_metrica = ultima_corrida
 
-    # Calcular o número de corridas participadas (onde a pontuação é diferente de zero)
-    df['Corridas Participadas'] = df.iloc[:, 5:ultima_corrida +
-                                          5].apply(lambda x: (x != 0).sum(), axis=1)
+    df = df.drop(columns=['Descarte'])
+    total_corridas = total_corridas_metrica
+
+    df['Corridas Participadas'] = df[cols_consistencia].apply(
+        lambda x: (x != 0).sum(), axis=1
+    )
 
     # Calcular o número de abandonos (total de corridas - corridas participadas)
     df['Abandonos'] = total_corridas - df['Corridas Participadas']
@@ -972,7 +1047,7 @@ with tabs[4]:
     df_abandonos["TOTAL"] = df_abandonos["NC"] + df_abandonos["EXC"] + df_abandonos["DSC"] + df_abandonos["NP"]
 
     # Criar a coluna "%"
-    df_abandonos["%"] = (df_abandonos["TOTAL"] / ultima_corrida) * 100
+    df_abandonos["%"] = (df_abandonos["TOTAL"] / total_corridas_metrica) * 100
     # Garantir que a coluna "%" seja numérica antes de arredondar
     df_abandonos["%"] = pd.to_numeric(df_abandonos["%"], errors='coerce')
     # Arredondar a coluna "%" para 2 casas decimais
@@ -989,15 +1064,16 @@ with tabs[4]:
     st.dataframe(styled_df_abandonos, hide_index=True)
 
     # Média de Pontuação por Corrida (Ordenada)
-    df['Média por Corrida'] = (df['Soma'] / ultima_corrida).round(2)
+    df['Média por Corrida'] = (df['Soma'] / total_corridas_metrica).round(2)
     df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False)
     st.write("#### Ranking de Pilotos por Média de Pontuação por Corrida")
     st.dataframe(
         df_sorted_by_media[['Piloto', 'Média por Corrida']])
 
     # Desvio Padrão da Pontuação (Ordenado do Menor para o Maior)
-    df['Desvio Padrão'] = df.iloc[:, 6:ultima_corrida+5].apply(
-        pd.to_numeric, errors='coerce').std(axis=1)
+    df['Desvio Padrão'] = df[cols_consistencia].apply(
+        pd.to_numeric, errors='coerce'
+    ).std(axis=1)
     df_sorted_by_std = df.sort_values(
         'Desvio Padrão', ascending=True)  # Menor para maior desvio
     st.write("#### Ranking de Pilotos por Desvio Padrão de Pontuação")
@@ -1045,8 +1121,8 @@ with tabs[5]:
             df_modelo = df[df['Modelo'] == modelo]
             pontuacao_total_por_modelo = []
 
-            for corrida in range(1, ultima_corrida + 1):
-                coluna_corrida = str(corrida)
+            for corrida in range(1, _num_corridas_logico() + 1):
+                coluna_corrida = _coluna_pdf_para_corrida_logica(corrida)
                 if coluna_corrida in df_modelo.columns:
                     df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
                         by=coluna_corrida, ascending=False
@@ -1091,15 +1167,15 @@ with tabs[5]:
         df_filtrado = df[df['Modelo'].isin(['Mitsubishi', 'Crevrolet', 'Toyota'])]
 
         evolucao = {'Modelo': []}
-        for corrida in range(1, ultima_corrida + 1):
+        for corrida in range(1, _num_corridas_logico() + 1):
             evolucao[f'Corrida {corrida}'] = []
 
         for modelo in df_filtrado['Modelo'].unique():
             df_modelo = df_filtrado[df_filtrado['Modelo'] == modelo]
             evolucao['Modelo'].append(modelo)
 
-            for corrida in range(1, ultima_corrida + 1):
-                coluna_corrida = str(corrida)
+            for corrida in range(1, _num_corridas_logico() + 1):
+                coluna_corrida = _coluna_pdf_para_corrida_logica(corrida)
 
                 if coluna_corrida in df_modelo.columns:
                     df_pontuacao = df_modelo[['Piloto', coluna_corrida]].sort_values(
@@ -1116,7 +1192,7 @@ with tabs[5]:
         df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
         #Pontos da Pole 2 Etapa
         df_evolucao.loc[df_evolucao['Modelo'] == 'Mitsubishi', 'Soma'] += 4
-        df_evolucao = df_evolucao[['Modelo'] + [f'Corrida {i}' for i in range(1, ultima_corrida + 1)] + ['Soma']]
+        df_evolucao = df_evolucao[['Modelo'] + [f'Corrida {i}' for i in range(1, _num_corridas_logico() + 1)] + ['Soma']]
 
         return df_evolucao
 
@@ -1172,14 +1248,12 @@ with tabs[6]:
         # Dicionário para armazenar os pódios
         podios = {}
 
-        for corrida in range(1, ultima_corrida + 1):
-            nome_coluna = str(corrida)  # Ex: "1", "2", etc.
+        for corrida in range(1, _num_corridas_logico() + 1):
+            nome_coluna = _coluna_pdf_para_corrida_logica(corrida)
 
-            # Verifica se a coluna existe no DataFrame
             if nome_coluna not in df.columns:
                 continue
 
-            # Converte para numérico (ignora "DSC", "EXC", etc.)
             pontuacoes = pd.to_numeric(df[nome_coluna], errors='coerce')
 
             # Pega os 3 maiores valores válidos
@@ -1265,17 +1339,17 @@ with tabs[6]:
         podios_por_equipe = {}
 
         # Iterar sobre as corridas até a última corrida informada
-        for corrida in range(1, ultima_corrida + 1):
-            # Verifica se a corrida é Sprint ou Principal
-            if corrida % 2 != 0:  # Sprint
+        for corrida in range(1, _num_corridas_logico() + 1):
+            if corrida % 2 != 0:
                 pontuacao = pontuacao_sprint
-            else:  # Principal
+            else:
                 pontuacao = pontuacao_principal
 
-            # Obter a coluna da corrida
-            coluna_corrida = df.iloc[:, 5 + corrida]
+            nome_col = _coluna_pdf_para_corrida_logica(corrida)
+            if nome_col not in df.columns:
+                continue
+            coluna_corrida = pd.to_numeric(df[nome_col], errors="coerce")
 
-            # Obter os três primeiros pilotos
             top_3_indices = coluna_corrida.nlargest(3).index
 
             for idx in top_3_indices:
