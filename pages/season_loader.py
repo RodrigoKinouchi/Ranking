@@ -64,6 +64,19 @@ df = df[colunas_fixas + colunas_sem_pole].rename(columns=renomeio_corridas)
 df = df.drop(index=0)
 df["Piloto"] = df["Piloto"].str.title()
 df["Equipe"] = df["Equipe"].str.title()
+
+# Blindagem final: remove qualquer coluna de corrida que ainda tenha padrão de pole
+# (somente ".", "2", vazio ou NaN), para não exibir nem usar em estatística.
+colunas_corrida_renomeadas = [c for c in df.columns if c not in colunas_fixas]
+for col in colunas_corrida_renomeadas:
+    valores = df[col].astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA}).dropna()
+    if not valores.empty and valores.isin([".", "2"]).all():
+        df = df.drop(columns=[col])
+
+# Reindexa corridas para manter sequência limpa (1, 2, 3, ...).
+colunas_corrida_finais = [c for c in df.columns if c not in colunas_fixas]
+renomeio_final = {col: str(i + 1) for i, col in enumerate(colunas_corrida_finais)}
+df = df.rename(columns=renomeio_final)
 """
 
     return source.replace(bloco_original, bloco_2026)
