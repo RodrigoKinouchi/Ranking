@@ -75,6 +75,14 @@ for col in colunas_corrida_renomeadas:
 
 # Reindexa corridas para manter sequência limpa (1, 2, 3, ...).
 colunas_corrida_finais = [c for c in df.columns if c not in colunas_fixas]
+
+# Regra fixa 2026: remover 1a e 4a colunas apos "Modelo"
+# (colunas de pontos de pole position, nao sao corridas).
+if len(colunas_corrida_finais) >= 4:
+    colunas_pole_fixas = [colunas_corrida_finais[0], colunas_corrida_finais[3]]
+    df = df.drop(columns=colunas_pole_fixas)
+    colunas_corrida_finais = [c for c in df.columns if c not in colunas_fixas]
+
 renomeio_final = {col: str(i + 1) for i, col in enumerate(colunas_corrida_finais)}
 df = df.rename(columns=renomeio_final)
 """
