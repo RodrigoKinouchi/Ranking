@@ -229,32 +229,6 @@ df['Soma'] = df[colunas_corridas_validas].sum(axis=1).round(0).astype(int)
 df[colunas_corridas_nomes] = df[colunas_corridas_nomes].astype(int)
 
 
-mapa_corridas = {
-    1: {'tipo': 'Sprint', 'pontuacao': {i: 16 - i for i in range(1, 16)}},  # Corrida especial
-    2: {'tipo': 'Sprint'},
-    3: {'tipo': 'Principal'},
-    4: {'tipo': 'Sprint'},
-    5: {'tipo': 'Principal'},
-    6: {'tipo': 'Sprint'},
-    7: {'tipo': 'Principal'},
-    8: {'tipo': 'Sprint'},
-    9: {'tipo': 'Principal'},
-    10: {'tipo': 'Sprint'},
-    11: {'tipo': 'Principal'},
-    12: {'tipo': 'Sprint'},
-    13: {'tipo': 'Principal'},
-    14: {'tipo': 'Sprint'},
-    15: {'tipo': 'Principal'},
-    16: {'tipo': 'Sprint'},
-    17: {'tipo': 'Principal'},
-    18: {'tipo': 'Sprint'},
-    19: {'tipo': 'Principal'},
-    20: {'tipo': 'Sprint'},
-    21: {'tipo': 'Principal'},
-    22: {'tipo': 'Sprint'},
-    23: {'tipo': 'Principal'},
-}
-
 pontuacao_sprint = {
     1: 55, 2: 50, 3: 46, 4: 42, 5: 38, 6: 36, 7: 34, 8: 32, 9: 30, 10: 28,
     11: 26, 12: 24, 13: 22, 14: 20, 15: 18, 16: 16, 17: 14, 18: 13, 19: 12, 20: 11,
@@ -269,26 +243,19 @@ pontuacao_principal = {
     31: 0, 32: 0, 33: 0, 34: 0
 }
 
-colunas_corridas = df.columns[6:28]
+# Colunas de corrida sem hardcode de posição no DataFrame.
+colunas_corridas = [col for col in colunas_corridas_nomes if col in df.columns]
 
-corridas_sprint = []
-corridas_principal = []
+# Regra: corridas ímpares = sprint, pares = principal.
+corridas_sprint = [col for col in colunas_corridas if int(col) % 2 != 0]
+corridas_principal = [col for col in colunas_corridas if int(col) % 2 == 0]
+
+# Detecta o valor de vitória por coluna dinamicamente.
 valores_vitoria_por_coluna = {}
-
-for i, col in enumerate(colunas_corridas):
-    corrida_num = i + 1
-    corrida_info = mapa_corridas.get(corrida_num)
-    if not corrida_info:
-        continue
-    tipo = corrida_info['tipo']
-    pontuacao_personalizada = corrida_info.get('pontuacao')
-
-    if tipo == 'Sprint':
-        corridas_sprint.append(col)
-        valores_vitoria_por_coluna[col] = max(pontuacao_personalizada.values()) if pontuacao_personalizada else max(pontuacao_sprint.values())
-    elif tipo == 'Principal':
-        corridas_principal.append(col)
-        valores_vitoria_por_coluna[col] = max(pontuacao_principal.values())
+for col in corridas_sprint + corridas_principal:
+    serie_numerica = pd.to_numeric(df[col], errors='coerce')
+    max_coluna = serie_numerica.max()
+    valores_vitoria_por_coluna[col] = max_coluna if pd.notna(max_coluna) else 0
 
 # Função para calcular a soma das pontuações por tipo de corrida (Sprint ou Principal)
 
@@ -452,7 +419,8 @@ with tabs[0]:
             'Lucas Foresti': 'background-color: gray; color: white;',
             'Cesar Ramos': 'background-color: yellow; color: black;',
             'Thiago Camilo': 'background-color: red; color: white;',
-            'Helio Castroneves': 'background-color: green; color: white;'
+            'Helio Castroneves': 'background-color: green; color: white;',
+            'Renan Guerra': 'background-color: #89CFF0; color: black;'
         }
 
         # Aplica a cor se o nome do piloto corresponder
@@ -635,7 +603,8 @@ with tabs[0]:
             'Lucas Foresti': 'background-color: #778899; color: white; font-weight: 700;',
             'Cesar Ramos': 'background-color: #FFA500; color: #1a1a1a; font-weight: 700;',
             'Thiago Camilo': 'background-color: #DC143C; color: white; font-weight: 700;',
-            'Helio Castroneves': 'background-color: #32CD32; color: white; font-weight: 700;'
+            'Helio Castroneves': 'background-color: #32CD32; color: white; font-weight: 700;',
+            'Renan Guerra': 'background-color: #89CFF0; color: #0f172a; font-weight: 700;'
         }
         # Fundo escuro padrão para linhas sem cor específica
         cor_base = color_map.get(row['Piloto'], 'background-color: #2d3748; color: #e2e8f0; font-weight: 500;')
