@@ -36,8 +36,8 @@ def _eh_coluna_pole(serie):
     valores = serie.astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA}).dropna()
     if valores.empty:
         return False
-    # Coluna de pole costuma ter somente '.' e eventualmente '2'.
-    return valores.isin([".", "2"]).all()
+    # Coluna de pole pode vir como "."/"2" ou "0"/"2" dependendo do parser do PDF.
+    return valores.isin([".", "0", "2"]).all()
 
 colunas_fixas = ["Posição", "Numeral", "Piloto", "Equipe", "Modelo"]
 
@@ -70,7 +70,7 @@ df["Equipe"] = df["Equipe"].str.title()
 colunas_corrida_renomeadas = [c for c in df.columns if c not in colunas_fixas]
 for col in colunas_corrida_renomeadas:
     valores = df[col].astype(str).str.strip().replace({"": pd.NA, "nan": pd.NA, "None": pd.NA}).dropna()
-    if not valores.empty and valores.isin([".", "2"]).all():
+    if not valores.empty and valores.isin([".", "0", "2"]).all():
         df = df.drop(columns=[col])
 
 # Reindexa corridas para manter sequência limpa (1, 2, 3, ...).
