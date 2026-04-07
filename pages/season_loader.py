@@ -47,7 +47,16 @@ else:
     raise ValueError("Layout inesperado no PDF 2026: menos de 5 colunas.")
 
 colunas_pos_modelo = [c for c in df.columns if c not in colunas_fixas]
-colunas_sem_pole = [c for c in colunas_pos_modelo if not _eh_coluna_pole(df[c])]
+# Regra solicitada para 2026: as colunas 1 e 4 após "Modelo" são de pole e
+# nunca devem aparecer nem entrar em estatísticas.
+indices_fixos_pole = {0, 3}
+colunas_sem_pole = [
+    c for i, c in enumerate(colunas_pos_modelo)
+    if i not in indices_fixos_pole
+]
+
+# Segurança adicional para mudanças futuras de layout da organização.
+colunas_sem_pole = [c for c in colunas_sem_pole if not _eh_coluna_pole(df[c])]
 
 renomeio_corridas = {col: str(i + 1) for i, col in enumerate(colunas_sem_pole)}
 df = df[colunas_fixas + colunas_sem_pole].rename(columns=renomeio_corridas)
