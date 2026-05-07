@@ -173,7 +173,7 @@ if CFG_PDF_2026["formato_novo"]:
 
 modelo_map = {
     'Q': 'Mitsubishi',
-    'A': 'Crevrolet',
+    'A': 'Chevrolet',
     'S': 'Toyota'
 }
 
@@ -1305,7 +1305,7 @@ with tabs[5]:
     def campeonato_por_modelo(df, ultima_corrida):
         logos = {
             'Mitsubishi': 'images/mitsubishi.png',
-            'Crevrolet': 'images/chev.png',
+            'Chevrolet': 'images/chev.png',
             'Toyota': 'images/toyota.png'
         }
 
@@ -1332,8 +1332,8 @@ with tabs[5]:
             resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
 
         # Adiciona +2 pontos Chevrolet por conta do erro do Helinho ser GR na tabela
-        if 'Crevolet' in resultado_campeonato:
-            resultado_campeonato['Crevolet'] += 2
+        if 'Chevrolet' in resultado_campeonato:
+            resultado_campeonato['Chevrolet'] += 2
 
         df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
             'Modelo', 'Pontuação Atual'
@@ -1358,7 +1358,7 @@ with tabs[5]:
     exibir_tabela_com_logos(df_campeonato)
 
     def evolucao_pontuacao(df, ultima_corrida):
-        df_filtrado = df[df['Modelo'].isin(['Mitsubishi', 'Crevrolet', 'Toyota'])]
+        df_filtrado = df[df['Modelo'].isin(['Mitsubishi', 'Chevrolet', 'Toyota'])]
 
         evolucao = {'Modelo': []}
         for corrida in range(1, _num_corridas_logico() + 1):
@@ -1419,7 +1419,7 @@ with tabs[5]:
 
         color_map = {
             "Toyota": "red",
-            "Crevrolet": "orange",
+            "Chevrolet": "orange",
             "Mitsubishi": "blue"
         }
 
