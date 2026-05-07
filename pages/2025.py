@@ -20,6 +20,82 @@ import re
 # PDF com blocos (pole), sprint, principal → colunas 1,2,3,4,5,6… (pole em 1,4,7,…).
 MODO_COLUNAS_2026 = False
 
+# PDF 2026 (layout atual): só corridas já realizadas, cabeçalhos "1ª","2ª",… e "." para pole.
+CFG_PDF_2026 = {"formato_novo": False}
+
+DEFAULT_PILOTO_IMG = os.path.join("images", "Pilotodesc.png")
+
+
+def caminho_imagem_piloto(nome_piloto: str) -> str:
+    path = os.path.join("images", f"{nome_piloto}.png")
+    return path if os.path.isfile(path) else DEFAULT_PILOTO_IMG
+
+
+def _strip_cell_header(h) -> str:
+    if h is None:
+        return ""
+    return str(h).strip()
+
+
+def _normalizar_pdf_stockcar_2026(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Layout típico do PDF Stock Car (pilotos): após Modelo repete-se pole («.») +
+    corrida + corrida, e à direita (opcional) Descarte e Soma. Como o pdfplumber
+    falha com cabeçalhos «ª» ou «.», usa geometria fixa da tabela (ciclo de 3 colunas).
+    """
+    df = df_raw.copy()
+    meta = ["Posição", "Numeral", "Piloto", "Equipe", "Modelo"]
+    raw_cols = list(df.columns)
+    n = len(raw_cols)
+    if n <= 5:
+        return df
+
+    final = [None] * n
+    for i in range(5):
+        final[i] = meta[i]
+
+    j = n - 1
+    trailers = []
+    while j >= 5:
+        h_raw = _strip_cell_header(raw_cols[j])
+        h = h_raw.lower()
+        if not h_raw:
+            if j == n - 1:
+                trailers.append((j, "Soma"))
+                j -= 1
+                continue
+            break
+        if "descarte" in h:
+            trailers.append((j, "Descarte"))
+            j -= 1
+            continue
+        if "soma" in h or h == "total":
+            trailers.append((j, "Soma"))
+            j -= 1
+            continue
+        break
+
+    core_idxs = list(range(5, j + 1))
+    pole_i = 1
+    race_i = 1
+    for offset, idx_col in enumerate(core_idxs):
+        if offset % 3 == 0:
+            final[idx_col] = f"pole_{pole_i}"
+            pole_i += 1
+        else:
+            final[idx_col] = str(race_i)
+            race_i += 1
+
+    for idx_col, label in sorted(trailers, key=lambda t: t[0]):
+        final[idx_col] = label
+
+    for i in range(n):
+        if final[i] is None:
+            final[i] = f"extra_{i}"
+
+    df.columns = final
+    return df
+
 
 # Configurando o título da página URL
 st.set_page_config(
@@ -40,38 +116,40 @@ st.write("")
 
 # Abre o PDF
 with pdfplumber.open("tabela2025.pdf") as pdf:
-    # Acessa a primeira página
     pagina = pdf.pages[0]
-
-    # Extrai tabelas da página (retorna uma lista de tabelas)
     tabelas = pagina.extract_tables()
 
-    if tabelas:
-        # Converte a primeira tabela para DataFrame
-        df = pd.DataFrame(tabelas[0][1:], columns=tabelas[0][0])
-        print(df)
-    else:
-        print("Nenhuma tabela encontrada na primeira página.")
+    if not tabelas:
+        st.error("Nenhuma tabela encontrada na primeira página do PDF.")
+        st.stop()
+
+    raw_headers = tabelas[0][0]
+    df = pd.DataFrame(tabelas[0][1:], columns=raw_headers)
+    print(df)
+
+CFG_PDF_2026["formato_novo"] = bool(MODO_COLUNAS_2026)
 
 novo_cabecalho = ["Posição", "Numeral", "Piloto", "Equipe", "Modelo",
                   "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                  "16", "17", "18", "19", "20", "21", "Descarte", "22", "23", "Soma"
-                  ]
-# Ajusta o cabeçalho ao tamanho real da tabela extraída (evita quebra quando o PDF muda layout).
-if len(df.columns) <= len(novo_cabecalho):
-    df.columns = novo_cabecalho[:len(df.columns)]
+                  "16", "17", "18", "19", "20", "21", "Descarte", "22", "23", "Soma"]
+
+if CFG_PDF_2026["formato_novo"]:
+    df = _normalizar_pdf_stockcar_2026(df)
 else:
-    extras = [f"extra_{i}" for i in range(1, len(df.columns) - len(novo_cabecalho) + 1)]
-    df.columns = novo_cabecalho + extras
+    if len(df.columns) <= len(novo_cabecalho):
+        df.columns = novo_cabecalho[:len(df.columns)]
+    else:
+        extras = [f"extra_{i}" for i in range(1, len(df.columns) - len(novo_cabecalho) + 1)]
+        df.columns = novo_cabecalho + extras
 
-# Cria uma lista com as colunas do DataFrame, colocando "Soma" na posição desejada
-novas_colunas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                 "16", "17", "18", "19", "20", "21", "22", "23", "Descarte"] + \
-    [col for col in df.columns if col not in ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
-                                              "16", "17", "18", "19", "20", "21", "22", "23", "Descarte"]]
+    novas_colunas = ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+                     "16", "17", "18", "19", "20", "21", "22", "23", "Descarte"] + \
+        [col for col in df.columns if col not in ['Posição', 'Numeral', 'Piloto', 'Equipe', 'Modelo', 'Soma', "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+                                                  "16", "17", "18", "19", "20", "21", "22", "23", "Descarte"]]
 
-colunas_existentes_na_ordem = [col for col in novas_colunas if col in df.columns]
-df = df[colunas_existentes_na_ordem]
+    colunas_existentes_na_ordem = [col for col in novas_colunas if col in df.columns]
+    df = df[colunas_existentes_na_ordem]
+
 df = df.drop(index=0)
 df["Piloto"] = df["Piloto"].str.title()
 df["Equipe"] = df["Equipe"].str.title()
@@ -79,6 +157,19 @@ df["Equipe"] = df["Equipe"].str.title()
 # Colunas extras do PDF (ex.: layout além do cabeçalho fixo). Não exibir nem usar em estatísticas.
 colunas_extras_pdf = [c for c in df.columns if str(c).startswith("extra_")]
 df = df.drop(columns=colunas_extras_pdf, errors="ignore")
+
+if CFG_PDF_2026["formato_novo"]:
+    _digit_meta = sorted([c for c in df.columns if str(c).isdigit()], key=int)
+    _poles_meta = sorted(
+        [c for c in df.columns if str(c).startswith("pole_")],
+        key=lambda x: int(str(x).split("_")[1]),
+    )
+    novas_colunas = (
+        ["Posição", "Numeral", "Piloto", "Equipe", "Modelo", "Soma"]
+        + _digit_meta
+        + _poles_meta
+        + ([c for c in ("Descarte",) if c in df.columns])
+    )
 
 modelo_map = {
     'Q': 'Mitsubishi',
@@ -107,8 +198,15 @@ def _ultimo_indice_coluna_pdf_2026(numero_ultima_corrida: int) -> int:
 ultima_corrida = st.number_input(
     "Informe o número da última corrida realizada", min_value=1, max_value=24, value=23, step=1)
 
-# Colunas numéricas do PDF usadas no processamento (2026: derivado da última corrida)
-if MODO_COLUNAS_2026:
+# Colunas numéricas do PDF usadas no processamento (2026: layout novo = só corridas "1"…"n"; antigo = blocos pole+sprint+principal)
+if MODO_COLUNAS_2026 and CFG_PDF_2026.get("formato_novo"):
+    corridas_no_pdf = sorted([int(c) for c in df.columns if str(c).isdigit()])
+    max_pdf = max(corridas_no_pdf) if corridas_no_pdf else 0
+    ultima_efetiva = min(ultima_corrida, max_pdf) if max_pdf else ultima_corrida
+    colunas_corridas_nomes = [
+        str(i) for i in range(1, ultima_efetiva + 1) if str(i) in df.columns
+    ]
+elif MODO_COLUNAS_2026:
     _limite_col_pdf = _ultimo_indice_coluna_pdf_2026(ultima_corrida)
     colunas_corridas_nomes = [str(i) for i in range(1, _limite_col_pdf + 1)]
 else:
@@ -122,17 +220,30 @@ for _c_pad in colunas_corridas_nomes:
 
 def _indice_limite_colunas_pdf() -> int:
     """Maior índice de coluna numérica considerado (alinha 2025 e 2026)."""
+    if CFG_PDF_2026.get("formato_novo"):
+        digs = [int(c) for c in df.columns if str(c).isdigit()]
+        return max(digs) if digs else ultima_corrida
     if MODO_COLUNAS_2026:
         return _ultimo_indice_coluna_pdf_2026(ultima_corrida)
     return ultima_corrida
 
 
 def _colunas_pole_pdf() -> set[str]:
-    """Colunas de pole no PDF 2026: índices 1, 4, 7, … até o limite ativo."""
+    """Colunas de pole: PDF 2026 novo → pole_*; PDF 2026 antigo → índices 1, 4, 7, …"""
     if not MODO_COLUNAS_2026:
         return set()
+    if CFG_PDF_2026.get("formato_novo"):
+        return {c for c in df.columns if str(c).startswith("pole_")}
     m = _indice_limite_colunas_pdf()
     return {str(1 + 3 * k) for k in range(m + 1) if (1 + 3 * k) <= m}
+
+
+def _colunas_pole_lista() -> list[str]:
+    """Lista ordenada pole_1, pole_2, …"""
+    return sorted(
+        [c for c in df.columns if str(c).startswith("pole_")],
+        key=lambda x: int(str(x).split("_")[1]) if "_" in str(x) else 0,
+    )
 
 
 def _num_corridas_logico() -> int:
@@ -141,8 +252,10 @@ def _num_corridas_logico() -> int:
 
 
 def _coluna_pdf_para_corrida_logica(n_logico: int) -> str:
-    """Corrida 1,2,3,… (ordem real) → nome da coluna no PDF (ex.: 2,3,5,6)."""
+    """Corrida 1,2,3,… (ordem real) → nome da coluna no PDF (ex.: 2,3,5,6 ou '1','2' no layout novo)."""
     if not MODO_COLUNAS_2026:
+        return str(n_logico)
+    if CFG_PDF_2026.get("formato_novo"):
         return str(n_logico)
     w = (n_logico - 1) // 2
     if n_logico % 2 == 1:
@@ -224,17 +337,22 @@ for idx, row_original in df_original_para_descartes.iterrows():
     
     dsc_por_indice[idx] = colunas_dsc
 
+# Última corrida que entra no recorte (PDF novo: só etapas já existentes na tabela)
+_u_descarte_limite = ultima_corrida
+if MODO_COLUNAS_2026 and CFG_PDF_2026.get("formato_novo") and colunas_corridas_nomes:
+    _u_descarte_limite = max(int(c) for c in colunas_corridas_nomes)
+
 # Identifica as últimas 2 corridas (não podem ser descartadas) — nomes de coluna no PDF
-if ultima_corrida >= 2:
+if _u_descarte_limite >= 2:
     if MODO_COLUNAS_2026:
         ultimas_2_corridas_descarte = {
-            _coluna_pdf_para_corrida_logica(ultima_corrida - 1),
-            _coluna_pdf_para_corrida_logica(ultima_corrida),
+            _coluna_pdf_para_corrida_logica(_u_descarte_limite - 1),
+            _coluna_pdf_para_corrida_logica(_u_descarte_limite),
         }
     else:
         ultimas_2_corridas_descarte = {
-            str(ultima_corrida - 1),
-            str(ultima_corrida),
+            str(_u_descarte_limite - 1),
+            str(_u_descarte_limite),
         }
 else:
     ultimas_2_corridas_descarte = set()
@@ -287,16 +405,29 @@ df['Descarte'] = df['Descarte'].round(0).astype(int)
 # Substitui NaN restantes por 0 para soma
 df[colunas_corridas_nomes] = df[colunas_corridas_nomes].fillna(0)
 
-# Soma de todas as pontuações usando os nomes das colunas
+colunas_pole_vals = _colunas_pole_lista() if CFG_PDF_2026.get("formato_novo") else []
+for _pc in colunas_pole_vals:
+    if _pc not in df.columns:
+        df[_pc] = 0
+if colunas_pole_vals:
+    df[colunas_pole_vals] = df[colunas_pole_vals].replace({".": pd.NA, "": pd.NA})
+    df[colunas_pole_vals] = df[colunas_pole_vals].apply(
+        pd.to_numeric, errors="coerce"
+    ).fillna(0)
+
+# Soma de todas as pontuações usando os nomes das colunas (+ bônus de pole no PDF 2026 novo)
 # Garante que só estamos somando colunas que realmente existem e são corridas (não "Descarte")
 colunas_corridas_validas = [col for col in colunas_corridas_nomes if col in df.columns and col != "Descarte"]
-df['Soma'] = df[colunas_corridas_validas].sum(axis=1).round(0).astype(int)
+_cols_soma_total = colunas_corridas_validas + colunas_pole_vals
+df['Soma'] = df[_cols_soma_total].sum(axis=1).round(0).astype(int)
 
 # Subtrai o descarte da soma total para obter a pontuação final
 #df['Soma'] = (df['Soma'] - df['Descarte']).round(0).astype(int)
 
 # Garante que o tipo é numérico inteiro (evita erros em plotagens e análises futuras)
 df[colunas_corridas_nomes] = df[colunas_corridas_nomes].astype(int)
+if colunas_pole_vals:
+    df[colunas_pole_vals] = df[colunas_pole_vals].round(0).astype(int)
 
 
 pontuacao_sprint = {
@@ -317,10 +448,14 @@ pontuacao_principal = {
 colunas_corridas = [col for col in colunas_corridas_nomes if col in df.columns]
 
 # Regra: corridas ímpares = sprint, pares = principal (2025).
-# 2026: sprint nas colunas 2,5,8,… e principal em 3,6,9,… (após colunas de pole).
+# 2026 layout novo: colunas "1","2",… = ordem real das etapas.
+# 2026 layout antigo: sprint nas colunas 2,5,8,… e principal em 3,6,9,… (após colunas de pole).
 corridas_sprint = [col for col in colunas_corridas if int(col) % 2 != 0]
 corridas_principal = [col for col in colunas_corridas if int(col) % 2 == 0]
-if MODO_COLUNAS_2026:
+if MODO_COLUNAS_2026 and CFG_PDF_2026.get("formato_novo"):
+    corridas_sprint = [c for c in colunas_corridas if int(c) % 2 != 0]
+    corridas_principal = [c for c in colunas_corridas if int(c) % 2 == 0]
+elif MODO_COLUNAS_2026:
     m = _indice_limite_colunas_pdf()
     corridas_sprint = [
         str(2 + 3 * k)
@@ -520,7 +655,7 @@ with tabs[0]:
             [c for c in df_tabela_visual.columns if str(c).isdigit()],
             key=lambda x: int(x),
         )
-        renomear = {c: f"{i}ª" for i, c in enumerate(cols_vis, start=1)}
+        renomear = {c: f"{int(c)}ª" for c in cols_vis}
         df_tabela_visual = df_tabela_visual.rename(columns=renomear)
 
     df_tabela_visual = df_tabela_visual.set_index('Posição')
@@ -528,10 +663,15 @@ with tabs[0]:
 
     st.write("### Tabela de Pontuação do Campeonato")
     if MODO_COLUNAS_2026:
-        st.caption(
-            "Colunas de pole do PDF (posições 1, 4, 7, …) não aparecem aqui, "
-            "mas entram na coluna Soma."
-        )
+        if CFG_PDF_2026.get("formato_novo"):
+            st.caption(
+                "Colunas «.» do PDF (bônus de pole) não aparecem aqui, mas entram na coluna Soma."
+            )
+        else:
+            st.caption(
+                "Colunas de pole do PDF (posições 1, 4, 7, …) não aparecem aqui, "
+                "mas entram na coluna Soma."
+            )
 
     st.dataframe(df_styled, use_container_width=True)
 
@@ -557,13 +697,17 @@ with tabs[0]:
         df_com_descarte.insert(0, 'Posição', range(1, len(df_com_descarte) + 1))
 
     # Listar colunas de pontuação (corridas 1 … última-1), com nomes reais no PDF em 2026
+    _limite_corridas_descarte_ui = (
+        _u_descarte_limite if MODO_COLUNAS_2026 and CFG_PDF_2026.get("formato_novo") else ultima_corrida
+    )
     if MODO_COLUNAS_2026:
         colunas_pontuacao = [
             _coluna_pdf_para_corrida_logica(i)
-            for i in range(1, ultima_corrida)
+            for i in range(1, _limite_corridas_descarte_ui)
         ]
     else:
         colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
+    colunas_pontuacao = [c for c in colunas_pontuacao if c in df_com_descarte.columns]
 
     # Criar dicionário para identificar quais colunas eram "EXC" e "DSC" antes das transformações
     # Usar o DataFrame original para identificar EXC e DSC
@@ -589,16 +733,16 @@ with tabs[0]:
         exc_por_piloto[piloto] = colunas_exc
         dsc_por_piloto[piloto] = colunas_dsc
 
-    if ultima_corrida >= 2:
+    if _u_descarte_limite >= 2:
         if MODO_COLUNAS_2026:
             ultimas_2_corridas = {
-                _coluna_pdf_para_corrida_logica(ultima_corrida - 1),
-                _coluna_pdf_para_corrida_logica(ultima_corrida),
+                _coluna_pdf_para_corrida_logica(_u_descarte_limite - 1),
+                _coluna_pdf_para_corrida_logica(_u_descarte_limite),
             }
         else:
             ultimas_2_corridas = {
-                str(ultima_corrida - 1),
-                str(ultima_corrida),
+                str(_u_descarte_limite - 1),
+                str(_u_descarte_limite),
             }
     else:
         ultimas_2_corridas = set()
@@ -956,7 +1100,7 @@ with tabs[2]:
 
         for i, piloto in enumerate(pilotos_com_max_vitorias_sprint):
             with cols[i]:
-                st.image(f'images/{piloto}.png', caption=piloto, width=150)
+                st.image(caminho_imagem_piloto(piloto), caption=piloto, width=150)
 
         fig_sprint = plotar_grafico_evolucao(
             df, corridas_sprint, corridas_principal, tipo_corrida='Sprint')
@@ -1032,7 +1176,7 @@ with tabs[3]:
 
         for i, piloto in enumerate(pilotos_com_max_vitorias_principal):
             with cols[i]:
-                st.image(f'images/{piloto}.png', caption=piloto, width=150)
+                st.image(caminho_imagem_piloto(piloto), caption=piloto, width=150)
 
         st.write("## Ranking de Pilotos - Corridas Principal")
 
@@ -1068,7 +1212,10 @@ with tabs[4]:
             for i in range(1, _nlog + 1)
         ]
         cols_consistencia = [c for c in cols_consistencia if c in df.columns]
-        total_corridas_metrica = _nlog
+        if CFG_PDF_2026.get("formato_novo"):
+            total_corridas_metrica = len(cols_consistencia) if cols_consistencia else _u_descarte_limite
+        else:
+            total_corridas_metrica = _nlog
     else:
         cols_consistencia = [
             str(i) for i in range(1, ultima_corrida + 1) if str(i) in df.columns
@@ -1349,7 +1496,7 @@ with tabs[6]:
     # Exibir o 1º colocado no centro
     with col2:
         primeiro = top_3.iloc[0]
-        st.image(f'images/{primeiro["Piloto"]}.png',
+        st.image(caminho_imagem_piloto(primeiro["Piloto"]),
                  caption=primeiro["Piloto"], width=image_width)
         st.write(f"**{primeiro['Piloto']}**")
         st.write(f"Pódios: {primeiro['Pódios']}")
@@ -1360,7 +1507,7 @@ with tabs[6]:
         st.write("")
         st.write("")
         segundo = top_3.iloc[1]
-        st.image(f'images/{segundo["Piloto"]}.png',
+        st.image(caminho_imagem_piloto(segundo["Piloto"]),
                  caption=segundo["Piloto"], width=image_width)
         st.write(f"**{segundo['Piloto']}**")
         st.write(f"Pódios: {segundo['Pódios']}")
@@ -1371,7 +1518,7 @@ with tabs[6]:
         st.write("")
         st.write("")
         terceiro = top_3.iloc[2]
-        st.image(f'images/{terceiro["Piloto"]}.png',
+        st.image(caminho_imagem_piloto(terceiro["Piloto"]),
                  caption=terceiro["Piloto"], width=image_width)
         st.write(f"**{terceiro['Piloto']}**")
         st.write(f"Pódios: {terceiro['Pódios']}")
@@ -1807,11 +1954,7 @@ with tabs[9]:
 
     # Função para exibir a imagem do piloto
     def exibir_imagem_piloto(piloto):
-        image_path = f'images/{piloto}.png'
-        if os.path.exists(image_path):
-            st.image(image_path, caption=piloto, width=150)
-        else:
-            st.image('images/Pilotodesc.png', caption=piloto, width=150)
+        st.image(caminho_imagem_piloto(piloto), caption=piloto, width=150)
 
     with col1:
         exibir_imagem_piloto(piloto1)
