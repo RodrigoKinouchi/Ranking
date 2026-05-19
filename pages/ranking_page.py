@@ -1264,9 +1264,9 @@ def render_season_page(config: SeasonConfig) -> None:
 
                 resultado_campeonato[modelo] = sum(pontuacao_total_por_modelo)
 
-        for modelo, bonus in config.montadora_pontos_bonus.items():
-            if modelo in resultado_campeonato:
-                resultado_campeonato[modelo] += bonus
+            for modelo, bonus in config.montadora_pontos_bonus.items():
+                if modelo in resultado_campeonato:
+                    resultado_campeonato[modelo] += bonus
 
             df_campeonato = pd.DataFrame(list(resultado_campeonato.items()), columns=[
                 'Modelo', 'Pontuação Atual'
