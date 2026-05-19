@@ -104,6 +104,60 @@ def caminho_imagem_piloto(nome_piloto: str) -> str:
     return path if os.path.isfile(path) else DEFAULT_PILOTO_IMG
 
 
+def _parece_token_equipe(token: str) -> bool:
+    t = token.strip()
+    if not t or t.lower() in {"jr", "filho", "de", "da", "do", "di"}:
+        return False
+    if t.isupper() and len(t) <= 10:
+        return True
+    return len(t) <= 3 and t.isalpha() and t[0].isupper()
+
+
+def _piloto_qualifying_de_tokens(tokens: list[str]) -> str:
+    """Extrai só o nome do piloto (sem equipe) a partir dos tokens após posição/numeral."""
+    if not tokens:
+        return ""
+    if len(tokens) == 1:
+        partes = tokens[0].split()
+        nome: list[str] = []
+        for p in partes:
+            if len(nome) >= 2 and _parece_token_equipe(p):
+                break
+            if len(nome) >= 3:
+                break
+            nome.append(p)
+        return " ".join(nome).title()
+
+    partes: list[str] = []
+    for t in tokens:
+        if len(partes) >= 2 and _parece_token_equipe(t):
+            break
+        if len(partes) >= 3:
+            break
+        partes.append(t)
+    return " ".join(partes).title()
+
+
+def normalizar_pilotos_qualifying(
+    df_qualifying: pd.DataFrame, df_campeonato: pd.DataFrame
+) -> pd.DataFrame:
+    """Alinha nomes do qualifying aos da tabela oficial do campeonato (por numeral)."""
+    out = df_qualifying.copy()
+    if "Numeral" not in out.columns or "Numeral" not in df_campeonato.columns:
+        return out
+
+    mapa = (
+        df_campeonato.assign(Numeral=pd.to_numeric(df_campeonato["Numeral"], errors="coerce"))
+        .dropna(subset=["Numeral"])
+        .drop_duplicates("Numeral", keep="first")
+        .set_index("Numeral")["Piloto"]
+    )
+    nums = pd.to_numeric(out["Numeral"], errors="coerce")
+    oficial = nums.map(mapa)
+    out["Piloto"] = oficial.fillna(out["Piloto"])
+    return out
+
+
 def extrair_qualifying_pdf(arquivo_pdf: str) -> pd.DataFrame | None:
     """Extrai qualifying: tenta tabela estruturada; fallback para texto."""
     import pdfplumber
@@ -121,11 +175,12 @@ def extrair_qualifying_pdf(arquivo_pdf: str) -> pd.DataFrame | None:
                     if not pos.isdigit():
                         continue
                     no = str(linha[1]).strip() if len(linha) > 1 else ""
-                    piloto = " ".join(
+                    tokens = [
                         str(c).strip() for c in linha[2:] if c and str(c).strip()
-                    )
+                    ]
+                    piloto = _piloto_qualifying_de_tokens(tokens)
                     if piloto:
-                        dados.append((pos, no, piloto.title()))
+                        dados.append((pos, no, piloto))
                 if dados:
                     return pd.DataFrame(dados, columns=["Posição", "Numeral", "Piloto"])
 
@@ -134,8 +189,9 @@ def extrair_qualifying_pdf(arquivo_pdf: str) -> pd.DataFrame | None:
                 colunas = linha.split()
                 if colunas and colunas[0].isdigit() and len(colunas) >= 3:
                     pos, no = colunas[0], colunas[1]
-                    name = " ".join(colunas[2:min(len(colunas), 5)])
-                    dados.append((pos, no, name.title()))
+                    name = _piloto_qualifying_de_tokens(colunas[2:])
+                    if name:
+                        dados.append((pos, no, name))
     except OSError:
         return None
 

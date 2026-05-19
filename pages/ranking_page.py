@@ -18,11 +18,18 @@ from ranking_core import (
     detectar_ultima_corrida,
     extrair_qualifying_pdf,
     normalizar_pdf_stockcar_2026,
+    normalizar_pilotos_qualifying,
     strip_cell_header,
 )
 from season_config import SeasonConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _exibir_dataframe(df, **kwargs):
+    """Exibe tabela com largura proporcional ao conteúdo (não estica na página)."""
+    kwargs.setdefault("use_container_width", False)
+    _exibir_dataframe(df, **kwargs)
 
 
 def render_season_page(config: SeasonConfig) -> None:
@@ -606,7 +613,7 @@ def render_season_page(config: SeasonConfig) -> None:
                     "mas entram na coluna Soma."
                 )
 
-        st.dataframe(df_styled, use_container_width=True)
+        _exibir_dataframe(df_styled)
 
         df = df.set_index('Posição')
 
@@ -897,7 +904,7 @@ def render_season_page(config: SeasonConfig) -> None:
         </div>
         """, unsafe_allow_html=True)
     
-        st.dataframe(df_com_descarte_styled, use_container_width=True, height=600)
+        _exibir_dataframe(df_com_descarte_styled, height=600)
 
 
     with tabs[1]:
@@ -950,8 +957,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Exibir
         st.write("### Tabela de Pontuação por Equipe")
-        st.dataframe(df_equipes_styled.hide(
-            axis="index"), use_container_width=True, hide_index= True)
+        _exibir_dataframe(df_equipes_styled.hide(axis="index"), hide_index=True)
 
         # Gráfico de vitórias
         st.subheader("Vitórias Totais por Equipe")
@@ -1055,7 +1061,7 @@ def render_season_page(config: SeasonConfig) -> None:
             colorir_piloto, axis=1)
 
         # Exibir a tabela do ranking Sprint
-        st.dataframe(df_ranking_sprint_styled, hide_index=True)
+        _exibir_dataframe(df_ranking_sprint_styled, hide_index=True)
 
         # Exibe o gráfico de vitórias Sprint
         st.subheader("Vitórias nas Corridas Sprint")
@@ -1126,7 +1132,7 @@ def render_season_page(config: SeasonConfig) -> None:
                 colorir_piloto, axis=1)
 
             # Exibir a tabela do ranking Principal
-            st.dataframe(df_ranking_principal_styled, hide_index=True)
+            _exibir_dataframe(df_ranking_principal_styled, hide_index=True)
 
             st.subheader("Evolução dos Pilotos - Corridas Principal")
             fig_principal = plotar_grafico_evolucao(
@@ -1167,7 +1173,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Exibir número de abandonos por piloto
         #st.write("#### Quantidade de corridas sem pontuar por Piloto")
-        #st.dataframe(df[['Piloto', 'Abandonos']])
+        #_exibir_dataframe(df[['Piloto', 'Abandonos']])
 
         # Manipulando o df_abandonos
         # Criar a coluna "TOTAL"
@@ -1188,13 +1194,13 @@ def render_season_page(config: SeasonConfig) -> None:
         })
 
         st.write("#### Confiabilidade")
-        st.dataframe(styled_df_abandonos, hide_index=True)
+        _exibir_dataframe(styled_df_abandonos, hide_index=True)
 
         # Média de Pontuação por Corrida (Ordenada)
         df['Média por Corrida'] = (df['Soma'] / total_corridas_metrica).round(2)
         df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False)
         st.write("#### Ranking de Pilotos por Média de Pontuação por Corrida")
-        st.dataframe(
+        _exibir_dataframe(
             df_sorted_by_media[['Piloto', 'Média por Corrida']])
 
         # Desvio Padrão da Pontuação (Ordenado do Menor para o Maior)
@@ -1204,7 +1210,7 @@ def render_season_page(config: SeasonConfig) -> None:
         df_sorted_by_std = df.sort_values(
             'Desvio Padrão', ascending=True)  # Menor para maior desvio
         st.write("#### Ranking de Pilotos por Desvio Padrão de Pontuação")
-        st.dataframe(
+        _exibir_dataframe(
             df_sorted_by_std[['Piloto', 'Desvio Padrão']])
 
         fig = px.histogram(df, x="Soma", nbins=20,
@@ -1231,7 +1237,7 @@ def render_season_page(config: SeasonConfig) -> None:
         })
 
         st.write("#### Eficiência Média por Equipe")
-        st.dataframe(df_eficiencia_equipes_styled, hide_index=True)
+        _exibir_dataframe(df_eficiencia_equipes_styled, hide_index=True)
 
     with tabs[5]:
 
@@ -1328,7 +1334,7 @@ def render_season_page(config: SeasonConfig) -> None:
         df_evolucao = evolucao_pontuacao(df, ultima_corrida)
 
         st.write("### Evolução das Pontuações ao Longo das Corridas")
-        st.dataframe(df_evolucao, hide_index=True)
+        _exibir_dataframe(df_evolucao, hide_index=True)
 
         def calcular_pontuacao_acumulada(df_evolucao):
             df_acumulado = df_evolucao.copy()
@@ -1460,7 +1466,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Exibir o restante dos pilotos em forma de tabela
         st.write("### Demais Pilotos")
-        st.dataframe(
+        _exibir_dataframe(
             df_podios.iloc[3:][['Ranking', 'Piloto', 'Pódios']].set_index('Ranking'))
 
         def calcular_podios_por_equipe(df, ultima_corrida):
@@ -1513,7 +1519,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Exibir a tabela de pódios por equipe com estilo
         st.write("### Estatísticas de Pódios por Equipe")
-        st.dataframe(styled_df_podios_equipe)
+        _exibir_dataframe(styled_df_podios_equipe)
 
     with tabs[7]:
         def carregar_dados_qualifying():
@@ -1531,6 +1537,7 @@ def render_season_page(config: SeasonConfig) -> None:
                 pdf_path = os.path.join(pasta_qualifying, f"Q{etapa}.pdf")
                 df_qualifying = extrair_qualifying_pdf(pdf_path)
                 if df_qualifying is not None and not df_qualifying.empty:
+                    df_qualifying = normalizar_pilotos_qualifying(df_qualifying, df)
                     dados_qualifying[f"Etapa {etapa}"] = df_qualifying
 
             return dados_qualifying
@@ -1555,7 +1562,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
             st.write(f"Resultado classificação {etapa_selecionada}:")
             # Exibe o DataFrame estilizado correspondente à etapa selecionada
-            st.dataframe(styled_df_etapa)
+            _exibir_dataframe(styled_df_etapa)
         else:
             st.write("Etapa não encontrada.")
 
@@ -1738,8 +1745,11 @@ def render_season_page(config: SeasonConfig) -> None:
                 "Posição Média de Largada": round(_media, 2) if _media is not None else "N/A",
             })
 
-        # Criar um DataFrame a partir da lista de dicionários
         df_estatisticas = pd.DataFrame(estatisticas_pilotos)
+        df_estatisticas["_ordem"] = df_estatisticas["Posição Média de Largada"].apply(
+            lambda v: float(v) if isinstance(v, (int, float)) else 999.0
+        )
+        df_estatisticas = df_estatisticas.sort_values("_ordem").drop(columns="_ordem")
 
         # Aplicar a coloração ao DataFrame
         styled_df_estatisticas = df_estatisticas.style.apply(colorir_piloto, axis=1)
@@ -1750,7 +1760,7 @@ def render_season_page(config: SeasonConfig) -> None:
         })
         
         st.markdown("<h2 style='text-align: center;'>Estatísticas dos Pilotos</h2>", unsafe_allow_html=True)
-        st.dataframe(styled_df_estatisticas, hide_index=True)
+        _exibir_dataframe(styled_df_estatisticas, hide_index=True)
 
     with tabs[9]:
         st.markdown("<h2 style='text-align: center;'>Comparação qualifying</h2>",
@@ -1889,4 +1899,4 @@ def render_season_page(config: SeasonConfig) -> None:
                 df_recorte['Posição'] = range(1, len(df_recorte) + 1)
                 df_recorte_sem_descarte = df_recorte.drop(columns=['Descarte'])
                 styled_df_recorte = df_recorte_sem_descorte.style.apply(colorir_piloto, axis=1)
-                st.dataframe(styled_df_recorte, hide_index=True)
+                _exibir_dataframe(styled_df_recorte, hide_index=True)
