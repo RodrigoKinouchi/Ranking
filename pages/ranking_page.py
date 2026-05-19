@@ -1315,11 +1315,13 @@ def render_season_page(config: SeasonConfig) -> None:
                     else:
                         evolucao[f'Corrida {corrida}'].append(0)
 
-        df_evolucao = pd.DataFrame(evolucao)
-        df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
-        for modelo, ajuste in config.montadora_soma_ajuste.items():
-            df_evolucao.loc[df_evolucao['Modelo'] == modelo, 'Soma'] += ajuste
-            df_evolucao = df_evolucao[['Modelo'] + [f'Corrida {i}' for i in range(1, _num_corridas_logico() + 1)] + ['Soma']]
+            df_evolucao = pd.DataFrame(evolucao)
+            df_evolucao['Soma'] = df_evolucao.iloc[:, 1:].sum(axis=1)
+            for modelo, ajuste in config.montadora_soma_ajuste.items():
+                df_evolucao.loc[df_evolucao['Modelo'] == modelo, 'Soma'] += ajuste
+            df_evolucao = df_evolucao[
+                ['Modelo'] + [f'Corrida {i}' for i in range(1, _num_corridas_logico() + 1)] + ['Soma']
+            ]
 
             return df_evolucao
 
