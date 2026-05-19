@@ -33,12 +33,11 @@ with pdfplumber.open("tabela.pdf") as pdf:
     # Extrai tabelas da página (retorna uma lista de tabelas)
     tabelas = pagina.extract_tables()
 
-    if tabelas:
-        # Converte a primeira tabela para DataFrame
-        df = pd.DataFrame(tabelas[0][1:], columns=tabelas[0][0])
-        print(df)
-    else:
-        print("Nenhuma tabela encontrada na primeira página.")
+    if not tabelas:
+        st.error("Nenhuma tabela encontrada na primeira página.")
+        st.stop()
+
+    df = pd.DataFrame(tabelas[0][1:], columns=tabelas[0][0])
 
 novo_cabecalho = ["Posição", "Numeral", "Piloto", "Equipe", "Modelo",
                   "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
@@ -1167,8 +1166,7 @@ with tabs[8]:
                             # Adiciona os dados à lista
                             dados.append((pos, no, name))
                         except IndexError as e:
-                            print(f"Erro ao processar a linha: '{
-                                  linha}'. Detalhes: {e}")
+                            continue
                             continue  # Ignora a linha e continua com a próxima
 
         except Exception as e:

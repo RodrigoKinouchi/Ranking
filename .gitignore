@@ -11,3 +11,6 @@ __pycache__/
 
 # Ignorar arquivos de backup
 *.bak
+
+# Backup local de assets (original mantido em background2.png no repo)
+# images/background2.png
