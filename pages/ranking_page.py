@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def _exibir_dataframe(df, **kwargs):
     """Exibe tabela com largura proporcional ao conteúdo (não estica na página)."""
     kwargs.setdefault("use_container_width", False)
-    _exibir_dataframe(df, **kwargs)
+    st.dataframe(df, **kwargs)
 
 
 def render_season_page(config: SeasonConfig) -> None:
