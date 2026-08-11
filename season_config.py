@@ -15,6 +15,10 @@ class SeasonConfig:
     montadora_pontos_bonus: dict[str, int] = field(default_factory=dict)
     montadora_soma_ajuste: dict[str, int] = field(default_factory=dict)
     qualifying_excecoes: dict[str, list[int]] = field(default_factory=dict)
+    n_descartes: int = 5
+    endurance_etapas: list[int] = field(default_factory=list)
+    proteger_ultimas_concluidas: bool = True
+    total_corridas_ano: int | None = None
 
 
 def get_season_config(year: int) -> SeasonConfig:
@@ -25,6 +29,8 @@ def get_season_config(year: int) -> SeasonConfig:
             qualifying_dir="qualifying2025/",
             default_ultima_corrida=23,
             qualifying_excecoes={"Cesar Ramos": [8]},
+            n_descartes=5,
+            proteger_ultimas_concluidas=True,
         ),
         2026: SeasonConfig(
             year=2026,
@@ -37,6 +43,10 @@ def get_season_config(year: int) -> SeasonConfig:
             ),
             montadora_pontos_bonus={"Chevrolet": 2},
             montadora_soma_ajuste={"Mitsubishi": 4},
+            n_descartes=2,
+            endurance_etapas=[9],
+            proteger_ultimas_concluidas=False,
+            total_corridas_ano=24,
         ),
     }
     if year not in configs:

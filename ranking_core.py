@@ -88,6 +88,42 @@ def _coluna_tem_resultado(serie: pd.Series) -> bool:
     return False
 
 
+def corridas_logicas_da_etapa(etapa: int) -> tuple[int, int]:
+    """Etapa de fim de semana (1, 2, …) → par sprint/principal (1-2, 3-4, …)."""
+    return (2 * etapa - 1, 2 * etapa)
+
+
+def colunas_protegidas_descarte(
+    *,
+    endurance_etapas: list[int],
+    proteger_ultimas_concluidas: bool,
+    ultima_corrida: int,
+    total_corridas_ano: int | None,
+    coluna_fn,
+) -> set[str]:
+    """
+    Colunas que o regulamento não permite descartar.
+    2026: Endurance + duas últimas provas do ano (sprint e principal).
+    2025: duas últimas corridas já realizadas.
+    """
+    protegidas: set[str] = set()
+    for etapa in endurance_etapas:
+        for n in corridas_logicas_da_etapa(etapa):
+            if n <= ultima_corrida:
+                protegidas.add(str(coluna_fn(n)))
+
+    if proteger_ultimas_concluidas and ultima_corrida >= 2:
+        protegidas.add(str(coluna_fn(ultima_corrida - 1)))
+        protegidas.add(str(coluna_fn(ultima_corrida)))
+
+    if total_corridas_ano and total_corridas_ano >= 2:
+        for n in (total_corridas_ano - 1, total_corridas_ano):
+            if n <= ultima_corrida:
+                protegidas.add(str(coluna_fn(n)))
+
+    return protegidas
+
+
 def detectar_ultima_corrida(df: pd.DataFrame, fallback: int = 1) -> int:
     """Infere a última corrida com dado no PDF (colunas numéricas 1, 2, 3…)."""
     corridas = sorted((int(c) for c in df.columns if str(c).isdigit()), reverse=True)

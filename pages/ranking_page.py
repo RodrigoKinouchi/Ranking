@@ -15,6 +15,7 @@ from PIL import Image
 
 from ranking_core import (
     caminho_imagem_piloto,
+    colunas_protegidas_descarte,
     detectar_ultima_corrida,
     extrair_qualifying_pdf,
     normalizar_pdf_stockcar_2026,
@@ -282,61 +283,34 @@ def render_season_page(config: SeasonConfig) -> None:
     if MODO_COLUNAS_2026 and CFG_PDF_2026.get("formato_novo") and colunas_corridas_nomes:
         _u_descarte_limite = max(int(c) for c in colunas_corridas_nomes)
 
-    # Identifica as últimas 2 corridas (não podem ser descartadas) — nomes de coluna no PDF
-    if _u_descarte_limite >= 2:
-        if MODO_COLUNAS_2026:
-            ultimas_2_corridas_descarte = {
-                _coluna_pdf_para_corrida_logica(_u_descarte_limite - 1),
-                _coluna_pdf_para_corrida_logica(_u_descarte_limite),
-            }
-        else:
-            ultimas_2_corridas_descarte = {
-                str(_u_descarte_limite - 1),
-                str(_u_descarte_limite),
-            }
-    else:
-        ultimas_2_corridas_descarte = set()
+    n_descartes = config.n_descartes
+    colunas_protegidas = colunas_protegidas_descarte(
+        endurance_etapas=config.endurance_etapas,
+        proteger_ultimas_concluidas=config.proteger_ultimas_concluidas,
+        ultima_corrida=_u_descarte_limite,
+        total_corridas_ano=config.total_corridas_ano,
+        coluna_fn=_coluna_pdf_para_corrida_logica,
+    )
 
     def calcular_descarte(row):
-        # Obtém o índice da linha atual
         row_idx = row.name
-    
-        # Identifica colunas que eram DSC (não podem ser descartadas)
         colunas_dsc = dsc_por_indice.get(row_idx, set())
-    
-        # Coleta pontuações válidas com suas colunas correspondentes
         pontuacoes_com_coluna = []
-    
-        # Itera pelas colunas de corridas
+
         for col in colunas_corridas_nomes:
-            if col in row.index:
-                # Não pode descartar se era DSC
-                if col in colunas_dsc:
-                    continue
-            
-                # Não pode descartar as últimas 2 corridas
-                if col in ultimas_2_corridas_descarte:
-                    continue
-            
-                # Pega o valor (ainda pode ser NaN se era DSC ou EXC)
-                valor = row[col]
-            
-                # Converte para numérico
-                valor_numeric = pd.to_numeric(valor, errors='coerce')
-            
-                # Só considera valores numéricos válidos (não NaN)
-                if pd.notna(valor_numeric) and valor_numeric >= 0:
-                    pontuacoes_com_coluna.append((valor_numeric, col))
-    
-        # Se houver menos de 2 pontuações válidas, não descarta nada
-        if len(pontuacoes_com_coluna) < 2:
-            return 0
-    
-        # Ordena por valor (menor primeiro) e pega as 2 menores
+            if col not in row.index:
+                continue
+            if col in colunas_dsc or col in colunas_protegidas:
+                continue
+            valor_numeric = pd.to_numeric(row[col], errors='coerce')
+            if pd.notna(valor_numeric) and valor_numeric >= 0:
+                pontuacoes_com_coluna.append((valor_numeric, col))
+
+        if len(pontuacoes_com_coluna) < n_descartes:
+            return sum(v for v, _ in pontuacoes_com_coluna) if pontuacoes_com_coluna else 0
+
         pontuacoes_com_coluna.sort(key=lambda x: x[0])
-        descarte = sum([valor for valor, _ in pontuacoes_com_coluna[:2]])
-    
-        return descarte
+        return sum(valor for valor, _ in pontuacoes_com_coluna[:n_descartes])
 
     # Aplicando a função de descarte ANTES de substituir NaN por 0
     df['Descarte'] = df.apply(calcular_descarte, axis=1)
@@ -619,13 +593,17 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # ========== NOVA TABELA COM DESCARTES ==========
         st.write("---")
-        st.markdown("""
+        _txt_excecao = (
+            " (exceto Endurance — corridas 17 e 18 — e as duas últimas provas do ano)"
+            if config.endurance_etapas else ""
+        )
+        st.markdown(f"""
         <div style='text-align: center; margin-bottom: 20px;'>
             <h2 style='color: #f7fafc; font-size: 28px; font-weight: 700; margin-bottom: 5px;'>
                 🏁 Classificação com Descarte de Pontuações
             </h2>
             <p style='color: #a0aec0; font-size: 14px; margin-top: 5px;'>
-                Classificação final após descartar as 5 menores pontuações de cada piloto
+                Classificação final após descartar as {n_descartes} piores pontuações de cada piloto{_txt_excecao}
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -640,10 +618,11 @@ def render_season_page(config: SeasonConfig) -> None:
         _limite_corridas_descarte_ui = (
             _u_descarte_limite if MODO_COLUNAS_2026 and CFG_PDF_2026.get("formato_novo") else ultima_corrida
         )
+        _fim_pontuacao = _limite_corridas_descarte_ui + (1 if not config.proteger_ultimas_concluidas else 0)
         if MODO_COLUNAS_2026:
             colunas_pontuacao = [
                 _coluna_pdf_para_corrida_logica(i)
-                for i in range(1, _limite_corridas_descarte_ui)
+                for i in range(1, _fim_pontuacao)
             ]
         else:
             colunas_pontuacao = [str(i) for i in range(1, ultima_corrida)]
@@ -673,99 +652,48 @@ def render_season_page(config: SeasonConfig) -> None:
             exc_por_piloto[piloto] = colunas_exc
             dsc_por_piloto[piloto] = colunas_dsc
 
-        if _u_descarte_limite >= 2:
-            if MODO_COLUNAS_2026:
-                ultimas_2_corridas = {
-                    _coluna_pdf_para_corrida_logica(_u_descarte_limite - 1),
-                    _coluna_pdf_para_corrida_logica(_u_descarte_limite),
-                }
-            else:
-                ultimas_2_corridas = {
-                    str(_u_descarte_limite - 1),
-                    str(_u_descarte_limite),
-                }
-        else:
-            ultimas_2_corridas = set()
-
         def calcular_descartes(row):
             piloto = row['Piloto']
             colunas_exc = exc_por_piloto.get(piloto, set())
             colunas_dsc = dsc_por_piloto.get(piloto, set())
             pontuacoes_validas = []
-        
+
             for col in colunas_pontuacao:
-                if col in row.index:
-                    # Se esta coluna era EXC, não pode ser descartada
-                    if col in colunas_exc:
-                        continue
-                
-                    # Se esta coluna era DSC, não pode ser descartada
-                    if col in colunas_dsc:
-                        continue
-                
-                    # Se esta coluna é uma das últimas 2 corridas, não pode ser descartada
-                    if col in ultimas_2_corridas:
-                        continue
-                    
-                    try:
-                        valor = row[col]
-                        valor_numeric = pd.to_numeric(valor, errors='coerce')
-                        # Valores > 0 podem ser descartados
-                        # Valores 0 podem ser descartados SE não eram EXC ou DSC (já filtrado acima)
-                        # NaN não pode ser descartado (já que era DSC ou EXC)
-                        if pd.notna(valor_numeric) and valor_numeric >= 0:
-                            # Incluir valores >= 0 (incluindo 0 que era NC ou NP)
-                            pontuacoes_validas.append(valor_numeric)
-                    except (TypeError, ValueError):
-                        pass
+                if col not in row.index:
+                    continue
+                if col in colunas_exc or col in colunas_dsc or col in colunas_protegidas:
+                    continue
+                try:
+                    valor_numeric = pd.to_numeric(row[col], errors='coerce')
+                    if pd.notna(valor_numeric) and valor_numeric >= 0:
+                        pontuacoes_validas.append(valor_numeric)
+                except (TypeError, ValueError):
+                    pass
 
-            # Se houver menos de 5, descarta todas
-            if len(pontuacoes_validas) == 0:
+            if not pontuacoes_validas:
                 return 0
-            elif len(pontuacoes_validas) <= 5:
-                return sum(sorted(pontuacoes_validas)[:5])
-            else:
-                # Ordena e pega as 5 menores
-                return sum(sorted(pontuacoes_validas)[:5])
+            return sum(sorted(pontuacoes_validas)[:n_descartes])
 
-        # --- Função para identificar quais colunas foram descartadas ---
         def identificar_colunas_descartadas(row):
             piloto = row['Piloto']
             colunas_exc = exc_por_piloto.get(piloto, set())
             colunas_dsc = dsc_por_piloto.get(piloto, set())
             pontuacoes_com_coluna = []
-        
-            for col in colunas_pontuacao:
-                if col in row.index:
-                    # Se esta coluna era EXC, não pode ser descartada
-                    if col in colunas_exc:
-                        continue
-                
-                    # Se esta coluna era DSC, não pode ser descartada
-                    if col in colunas_dsc:
-                        continue
-                
-                    # Se esta coluna é uma das últimas 2 corridas, não pode ser descartada
-                    if col in ultimas_2_corridas:
-                        continue
-                    
-                    try:
-                        valor = row[col]
-                        valor_numeric = pd.to_numeric(valor, errors='coerce')
-                        # Valores >= 0 podem ser descartados (incluindo 0 que era NC ou NP)
-                        if pd.notna(valor_numeric) and valor_numeric >= 0:
-                            pontuacoes_com_coluna.append((valor_numeric, col))
-                    except (TypeError, ValueError):
-                        pass
-        
-            # Ordena por valor (crescente) - as menores primeiro
-            pontuacoes_com_coluna = sorted(pontuacoes_com_coluna, key=lambda x: x[0])
 
-            if len(pontuacoes_com_coluna) <= 5:
-                return [col for _, col in pontuacoes_com_coluna]
-            else:
-                # Retorna as 5 menores
-                return [col for _, col in pontuacoes_com_coluna[:5]]
+            for col in colunas_pontuacao:
+                if col not in row.index:
+                    continue
+                if col in colunas_exc or col in colunas_dsc or col in colunas_protegidas:
+                    continue
+                try:
+                    valor_numeric = pd.to_numeric(row[col], errors='coerce')
+                    if pd.notna(valor_numeric) and valor_numeric >= 0:
+                        pontuacoes_com_coluna.append((valor_numeric, col))
+                except (TypeError, ValueError):
+                    pass
+
+            pontuacoes_com_coluna = sorted(pontuacoes_com_coluna, key=lambda x: x[0])
+            return [col for _, col in pontuacoes_com_coluna[:n_descartes]]
 
         # Calcula descartes e colunas descartadas ANTES de criar a função de estilo
         df_com_descarte['Descarte'] = df_com_descarte.apply(calcular_descartes, axis=1).astype(int)
@@ -895,12 +823,12 @@ def render_season_page(config: SeasonConfig) -> None:
                                       }
                                   ]))
         # Adicionar uma explicação visual melhorada antes da tabela
-        st.markdown("""
+        st.markdown(f"""
         <div style='background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border-left: 5px solid #ff4444; padding: 15px; margin-bottom: 20px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);'>
             <strong style='color: #f7fafc; font-size: 16px;'>📊 Legenda:</strong> 
             <span style='color: #e2e8f0;'>Valores destacados em</span> 
             <span style='background-color: #ff4444; padding: 6px 12px; border-radius: 4px; border: 2px solid #ff0000; font-weight: bold; color: white; box-shadow: 0 0 10px rgba(255, 0, 0, 0.6);'>vermelho</span> 
-            <span style='color: #e2e8f0;'>representam as <strong>5 menores pontuações descartadas</strong> de cada piloto.</span>
+            <span style='color: #e2e8f0;'>representam as <strong>{n_descartes} piores pontuações descartadas</strong> de cada piloto.</span>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1898,5 +1826,5 @@ def render_season_page(config: SeasonConfig) -> None:
                 df_recorte = df_recorte.sort_values(by='Soma', ascending=False).reset_index(drop=True)
                 df_recorte['Posição'] = range(1, len(df_recorte) + 1)
                 df_recorte_sem_descarte = df_recorte.drop(columns=['Descarte'])
-                styled_df_recorte = df_recorte_sem_descorte.style.apply(colorir_piloto, axis=1)
+                styled_df_recorte = df_recorte_sem_descarte.style.apply(colorir_piloto, axis=1)
                 _exibir_dataframe(styled_df_recorte, hide_index=True)
