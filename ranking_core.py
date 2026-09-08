@@ -29,16 +29,36 @@ DEFAULT_ROW_FILL_HEX = "2D3748"
 DEFAULT_ROW_FONT_HEX = "E2E8F0"
 
 
+def _css_to_excel_hex(css_color: str) -> str:
+    """Converte nome/hex CSS para RGB hex do openpyxl (sem #)."""
+    from matplotlib.colors import to_hex
+
+    try:
+        return to_hex(css_color).lstrip("#").upper()
+    except ValueError:
+        return DEFAULT_ROW_FILL_HEX
+
+
+def _font_contrast_hex(fill_hex: str) -> str:
+    r, g, b = int(fill_hex[0:2], 16), int(fill_hex[2:4], 16), int(fill_hex[4:6], 16)
+    luminancia = 0.299 * r + 0.587 * g + 0.114 * b
+    return "000000" if luminancia > 160 else "FFFFFF"
+
+
 def exportar_ranking_excel(
     df: pd.DataFrame,
     *,
     sheet_name: str = "Ranking",
     titulo: str | None = None,
+    color_by: str = "piloto",
 ) -> bytes:
-    """Gera .xlsx com as cores padrão dos pilotos (mesmo visual da tabela no app)."""
+    """Gera .xlsx colorido por piloto ou por equipe."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
+
+    if color_by == "equipe":
+        from season_config import cor_equipe_2026
 
     wb = Workbook()
     ws = wb.active
@@ -71,12 +91,20 @@ def exportar_ranking_excel(
 
     for row_offset, (_, row) in enumerate(df.iterrows()):
         excel_row = header_row + 1 + row_offset
-        piloto = str(row.get("Piloto", ""))
-        fill_hex, font_hex = PILOTO_CORES_EXCEL.get(
-            piloto, (DEFAULT_ROW_FILL_HEX, DEFAULT_ROW_FONT_HEX)
-        )
+        if color_by == "equipe":
+            equipe = str(row.get("Equipe", ""))
+            fill_hex = _css_to_excel_hex(cor_equipe_2026(equipe))
+            font_hex = _font_contrast_hex(fill_hex)
+            destaque = True
+        else:
+            piloto = str(row.get("Piloto", ""))
+            fill_hex, font_hex = PILOTO_CORES_EXCEL.get(
+                piloto, (DEFAULT_ROW_FILL_HEX, DEFAULT_ROW_FONT_HEX)
+            )
+            destaque = piloto in PILOTO_CORES_EXCEL
+
         fill = PatternFill("solid", fgColor=fill_hex)
-        font = Font(bold=piloto in PILOTO_CORES_EXCEL, color=font_hex)
+        font = Font(bold=destaque, color=font_hex)
 
         for col_idx, col_name in enumerate(df.columns, start=1):
             valor: Any = row[col_name]

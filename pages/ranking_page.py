@@ -1523,6 +1523,7 @@ def render_season_page(config: SeasonConfig) -> None:
         df_podios_equipe = calcular_podios_por_equipe(df, ultima_corrida)
         # Adicionar a coluna de ranking
         df_podios_equipe['Ranking'] = range(1, len(df_podios_equipe) + 1)
+        df_podios_equipe_export = df_podios_equipe[['Ranking', 'Equipe', 'Pódios']].copy()
 
         # Definir a coluna 'Ranking' como índice
         df_podios_equipe.set_index('Ranking', inplace=True)
@@ -1534,6 +1535,18 @@ def render_season_page(config: SeasonConfig) -> None:
         # Exibir a tabela de pódios por equipe com estilo
         st.write("### Estatísticas de Pódios por Equipe")
         _exibir_dataframe(styled_df_podios_equipe)
+        st.download_button(
+            label="Download Excel formatado (cores das equipes)",
+            data=exportar_ranking_excel(
+                df_podios_equipe_export,
+                sheet_name="Podios Equipes",
+                titulo="Ranking de Pódios por Equipe",
+                color_by="equipe",
+            ),
+            file_name=f"ranking_podios_equipes_{config.year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_ranking_podios_equipes_{config.year}",
+        )
 
     with tabs[7]:
         def carregar_dados_qualifying():
