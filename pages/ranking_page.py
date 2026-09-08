@@ -1183,10 +1183,23 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Média de Pontuação por Corrida (Ordenada)
         df['Média por Corrida'] = (df['Soma'] / total_corridas_metrica).round(2)
-        df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False)
+        df_sorted_by_media = df.sort_values('Média por Corrida', ascending=False).reset_index(drop=True)
+        df_media_export = df_sorted_by_media[['Piloto', 'Equipe', 'Média por Corrida']].copy()
+        df_media_export.insert(0, 'Posição', range(1, len(df_media_export) + 1))
+        df_media_styled = df_media_export.style.apply(colorir_piloto, axis=1)
         st.write("#### Ranking de Pilotos por Média de Pontuação por Corrida")
-        _exibir_dataframe(
-            df_sorted_by_media[['Piloto', 'Média por Corrida']])
+        _exibir_dataframe(df_media_styled, hide_index=True)
+        st.download_button(
+            label="Download Excel formatado (cores dos pilotos)",
+            data=exportar_ranking_excel(
+                df_media_export,
+                sheet_name="Media por Corrida",
+                titulo="Ranking de Pilotos por Média de Pontuação por Corrida",
+            ),
+            file_name=f"ranking_media_corrida_{config.year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_ranking_media_{config.year}",
+        )
 
         # Desvio Padrão da Pontuação (Ordenado do Menor para o Maior)
         df['Desvio Padrão'] = df[cols_consistencia].apply(
@@ -1450,9 +1463,25 @@ def render_season_page(config: SeasonConfig) -> None:
             st.write(f"Pódios: {terceiro['Pódios']}")
 
         # Exibir o restante dos pilotos em forma de tabela
-        st.write("### Demais Pilotos")
-        _exibir_dataframe(
-            df_podios.iloc[3:][['Ranking', 'Piloto', 'Pódios']].set_index('Ranking'))
+        st.write("### Ranking completo de Pódios")
+        df_podios_export = df_podios[['Ranking', 'Piloto', 'Pódios']].copy()
+        # Inclui Equipe quando disponível no DF principal
+        if 'Equipe' in df.columns:
+            mapa_equipe = df.reset_index(drop=True).drop_duplicates('Piloto').set_index('Piloto')['Equipe']
+            df_podios_export.insert(2, 'Equipe', df_podios_export['Piloto'].map(mapa_equipe))
+        df_podios_styled = df_podios_export.style.apply(colorir_piloto, axis=1)
+        _exibir_dataframe(df_podios_styled, hide_index=True)
+        st.download_button(
+            label="Download Excel formatado (cores dos pilotos)",
+            data=exportar_ranking_excel(
+                df_podios_export,
+                sheet_name="Podios",
+                titulo="Ranking de Pódios por Piloto",
+            ),
+            file_name=f"ranking_podios_{config.year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_ranking_podios_{config.year}",
+        )
 
         def calcular_podios_por_equipe(df, ultima_corrida):
             # Dicionário para armazenar os pódios por equipe
