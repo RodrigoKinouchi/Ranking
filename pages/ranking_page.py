@@ -844,6 +844,21 @@ def render_season_page(config: SeasonConfig) -> None:
         df_equipes[colunas_so_corridas_equipe] = df_equipes[colunas_so_corridas_equipe].apply(
             pd.to_numeric, errors='coerce'
         )
+
+        # Equipes virtuais (ex.: ML Racing = Thiago Camilo + Cesar Ramos)
+        for nome_virtual, pilotos_virtuais in config.equipes_virtuais.items():
+            mask = df['Piloto'].isin(pilotos_virtuais)
+            if not mask.any():
+                continue
+            soma_cols = (
+                df.loc[mask, colunas_so_corridas_equipe]
+                .apply(pd.to_numeric, errors='coerce')
+                .sum()
+            )
+            linha = {'Equipe': nome_virtual}
+            linha.update({c: soma_cols.get(c, 0) for c in colunas_so_corridas_equipe})
+            df_equipes = pd.concat([df_equipes, pd.DataFrame([linha])], ignore_index=True)
+
         df_equipes['Soma'] = df_equipes[colunas_so_corridas_equipe].sum(axis=1).round(0).astype(int)
 
         df_equipes_sorted = df_equipes.sort_values(by='Soma', ascending=False).reset_index(drop=True)
@@ -871,7 +886,8 @@ def render_season_page(config: SeasonConfig) -> None:
             color_map_equipes = {
                 'IPIRANGA RACING': 'background-color: yellow; color: black;',
                 'AMATTHEIS VOGEL': 'background-color: orange; color: black;',
-                'AMATTHEIS RACING': 'background-color: green; color: black;'
+                'AMATTHEIS RACING': 'background-color: green; color: black;',
+                'ML RACING (TC + CR)': 'background-color: #c41e3a; color: white;',
             }
             equipe = row['Equipe'].strip().upper()
             color = color_map_equipes.get(equipe, '')
@@ -885,6 +901,14 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Exibir
         st.write("### Tabela de Pontuação por Equipe")
+        if config.equipes_virtuais:
+            st.caption(
+                "Inclui equipe virtual: "
+                + "; ".join(
+                    f"{nome} = {' + '.join(pilotos)}"
+                    for nome, pilotos in config.equipes_virtuais.items()
+                )
+            )
         _exibir_dataframe(df_equipes_styled.hide(axis="index"), hide_index=True)
 
         # Gráfico de vitórias

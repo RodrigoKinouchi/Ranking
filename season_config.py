@@ -19,6 +19,8 @@ class SeasonConfig:
     endurance_etapas: list[int] = field(default_factory=list)
     proteger_ultimas_concluidas: bool = True
     total_corridas_ano: int | None = None
+    # {nome_equipe_virtual: [pilotos]} — soma pontos dos pilotos e entra na aba Equipes.
+    equipes_virtuais: dict[str, list[str]] = field(default_factory=dict)
 
 
 def get_season_config(year: int) -> SeasonConfig:
@@ -47,6 +49,9 @@ def get_season_config(year: int) -> SeasonConfig:
             endurance_etapas=[9],
             proteger_ultimas_concluidas=False,
             total_corridas_ano=24,
+            equipes_virtuais={
+                "ML Racing (TC + CR)": ["Thiago Camilo", "Cesar Ramos"],
+            },
         ),
     }
     if year not in configs:
