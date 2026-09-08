@@ -22,7 +22,7 @@ from ranking_core import (
     normalizar_pilotos_qualifying,
     strip_cell_header,
 )
-from season_config import SeasonConfig
+from season_config import SeasonConfig, cor_equipe_2026
 
 logger = logging.getLogger(__name__)
 
@@ -464,27 +464,37 @@ def render_season_page(config: SeasonConfig) -> None:
     vitorias_df['Vitórias Totais'] = vitorias_df['Vitórias Sprint'] + vitorias_df['Vitórias Principal']
     vitorias_df = vitorias_df.sort_values(by='Vitórias Totais', ascending=False)
 
-    # === Gráficos ===
-    fig_sprint_equipes = px.pie(vitorias_df,
-                                names='Equipe',
-                                values='Vitórias Sprint',
-                                title='Vitórias por Equipe - Corridas Sprint',
-                                color='Equipe',
-                                color_discrete_sequence=px.colors.qualitative.Set3)
+    # === Gráficos (cores oficiais 2026 por equipe) ===
+    color_map_equipes_pie = {
+        equipe: cor_equipe_2026(equipe) for equipe in vitorias_df["Equipe"]
+    }
 
-    fig_principal_equipes = px.pie(vitorias_df,
-                                   names='Equipe',
-                                   values='Vitórias Principal',
-                                   title='Vitórias por Equipe - Corridas Principal',
-                                   color='Equipe',
-                                   color_discrete_sequence=px.colors.qualitative.Set1)
+    fig_sprint_equipes = px.pie(
+        vitorias_df,
+        names="Equipe",
+        values="Vitórias Sprint",
+        title="Vitórias por Equipe - Corridas Sprint",
+        color="Equipe",
+        color_discrete_map=color_map_equipes_pie,
+    )
 
-    fig_total_equipes = px.pie(vitorias_df,
-                               names='Equipe',
-                               values='Vitórias Totais',
-                               title='Vitórias Totais por Equipe',
-                               color='Equipe',
-                               color_discrete_sequence=px.colors.qualitative.Pastel)
+    fig_principal_equipes = px.pie(
+        vitorias_df,
+        names="Equipe",
+        values="Vitórias Principal",
+        title="Vitórias por Equipe - Corridas Principal",
+        color="Equipe",
+        color_discrete_map=color_map_equipes_pie,
+    )
+
+    fig_total_equipes = px.pie(
+        vitorias_df,
+        names="Equipe",
+        values="Vitórias Totais",
+        title="Vitórias Totais por Equipe",
+        color="Equipe",
+        color_discrete_map=color_map_equipes_pie,
+    )
 
 
     def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrida):
