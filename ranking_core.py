@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import os
+from typing import Any
 
 import pandas as pd
 
@@ -10,6 +12,101 @@ PILOTO_IMAGE_ALIASES: dict[str, str] = {
     "Helio Castroneves": "Helio Castroneves",
     "Hélio Castroneves": "Helio Castroneves",
 }
+
+# Cores do app (CSS) → (fill_hex, font_hex) para Excel.
+PILOTO_CORES_EXCEL: dict[str, tuple[str, str]] = {
+    "Gabriel Casagrande": ("800080", "FFFFFF"),  # purple
+    "Lucas Foresti": ("808080", "FFFFFF"),  # gray
+    "Cesar Ramos": ("FFFF00", "000000"),  # yellow
+    "Thiago Camilo": ("FF0000", "FFFFFF"),  # red
+    "Helio Castroneves": ("008000", "FFFFFF"),  # green
+    "Renan Guerra": ("89CFF0", "000000"),  # baby blue
+}
+
+HEADER_FILL_HEX = "1A202C"
+HEADER_FONT_HEX = "F7FAFC"
+DEFAULT_ROW_FILL_HEX = "2D3748"
+DEFAULT_ROW_FONT_HEX = "E2E8F0"
+
+
+def exportar_ranking_excel(
+    df: pd.DataFrame,
+    *,
+    sheet_name: str = "Ranking",
+    titulo: str | None = None,
+) -> bytes:
+    """Gera .xlsx com as cores padrão dos pilotos (mesmo visual da tabela no app)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name[:31]
+
+    thin = Border(
+        left=Side(style="thin", color="4A5568"),
+        right=Side(style="thin", color="4A5568"),
+        top=Side(style="thin", color="4A5568"),
+        bottom=Side(style="thin", color="4A5568"),
+    )
+    center = Alignment(horizontal="center", vertical="center")
+
+    start_row = 1
+    if titulo:
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(df.columns))
+        cell = ws.cell(1, 1, titulo)
+        cell.font = Font(bold=True, size=14, color=HEADER_FONT_HEX)
+        cell.fill = PatternFill("solid", fgColor=HEADER_FILL_HEX)
+        cell.alignment = center
+        start_row = 3
+
+    header_row = start_row
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        cell = ws.cell(header_row, col_idx, col_name)
+        cell.font = Font(bold=True, color=HEADER_FONT_HEX)
+        cell.fill = PatternFill("solid", fgColor=HEADER_FILL_HEX)
+        cell.alignment = center
+        cell.border = thin
+
+    for row_offset, (_, row) in enumerate(df.iterrows()):
+        excel_row = header_row + 1 + row_offset
+        piloto = str(row.get("Piloto", ""))
+        fill_hex, font_hex = PILOTO_CORES_EXCEL.get(
+            piloto, (DEFAULT_ROW_FILL_HEX, DEFAULT_ROW_FONT_HEX)
+        )
+        fill = PatternFill("solid", fgColor=fill_hex)
+        font = Font(bold=piloto in PILOTO_CORES_EXCEL, color=font_hex)
+
+        for col_idx, col_name in enumerate(df.columns, start=1):
+            valor: Any = row[col_name]
+            if pd.isna(valor):
+                valor = ""
+            elif hasattr(valor, "item"):
+                try:
+                    valor = valor.item()
+                except (ValueError, AttributeError):
+                    pass
+            cell = ws.cell(excel_row, col_idx, valor)
+            cell.fill = fill
+            cell.font = font
+            cell.alignment = center
+            cell.border = thin
+
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        max_len = max(
+            len(str(col_name)),
+            *(len(str(v)) for v in df[col_name].tolist()),
+            8,
+        )
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 4, 36)
+
+    ws.auto_filter.ref = ws.dimensions
+    ws.freeze_panes = ws.cell(header_row + 1, 1).coordinate
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 
 def strip_cell_header(header) -> str:

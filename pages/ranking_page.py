@@ -17,6 +17,7 @@ from ranking_core import (
     caminho_imagem_piloto,
     colunas_protegidas_descarte,
     detectar_ultima_corrida,
+    exportar_ranking_excel,
     extrair_qualifying_pdf,
     normalizar_pdf_stockcar_2026,
     normalizar_pilotos_qualifying,
@@ -1024,6 +1025,17 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Exibir a tabela do ranking Sprint
         _exibir_dataframe(df_ranking_sprint_styled, hide_index=True)
+        st.download_button(
+            label="Download Excel formatado (cores dos pilotos)",
+            data=exportar_ranking_excel(
+                df_ranking_sprint,
+                sheet_name="Ranking Sprint",
+                titulo="Ranking de Pilotos - Corridas Sprint",
+            ),
+            file_name=f"ranking_sprint_{config.year}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_ranking_sprint_{config.year}",
+        )
 
         # Exibe o gráfico de vitórias Sprint
         st.subheader("Vitórias nas Corridas Sprint")
@@ -1095,6 +1107,17 @@ def render_season_page(config: SeasonConfig) -> None:
 
             # Exibir a tabela do ranking Principal
             _exibir_dataframe(df_ranking_principal_styled, hide_index=True)
+            st.download_button(
+                label="Download Excel formatado (cores dos pilotos)",
+                data=exportar_ranking_excel(
+                    df_ranking_principal,
+                    sheet_name="Ranking Principal",
+                    titulo="Ranking de Pilotos - Corridas Principal",
+                ),
+                file_name=f"ranking_principal_{config.year}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"dl_ranking_principal_{config.year}",
+            )
 
             st.subheader("Evolução dos Pilotos - Corridas Principal")
             fig_principal = plotar_grafico_evolucao(
