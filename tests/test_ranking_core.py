@@ -27,6 +27,13 @@ def test_normalizar_pdf_colunas_corridas():
     assert "1" in out.columns
 
 
+def test_normalizar_pdf_soma_com_cabecalho_nan():
+    raw = pd.DataFrame([[1, 2, "A", "B", "Q", ".", 80, 55, 135]])
+    raw.columns = ["titulo"] + [float("nan")] * 8
+    out = normalizar_pdf_stockcar_2026(raw)
+    assert list(out.columns)[-4:] == ["pole_1", "1", "2", "Soma"]
+
+
 def test_etapa_9_sao_corridas_17_e_18():
     assert corridas_logicas_da_etapa(9) == (17, 18)
 

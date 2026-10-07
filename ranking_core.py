@@ -139,7 +139,8 @@ def exportar_ranking_excel(
 
 
 def strip_cell_header(header) -> str:
-    if header is None:
+    # pandas 3 converte cabeçalhos None do pdfplumber em NaN
+    if header is None or (isinstance(header, float) and pd.isna(header)):
         return ""
     return str(header).strip()
 
