@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 from typing import Any
 
 import pandas as pd
@@ -274,8 +275,22 @@ def _parece_token_equipe(token: str) -> bool:
     return len(t) <= 3 and t.isalpha() and t[0].isupper()
 
 
+def _so_titular(tokens: list[str]) -> list[str]:
+    """Em duplas (Endurance: "TITULAR / CONVIDADO"), mantém só os tokens do titular."""
+    saida: list[str] = []
+    for t in tokens:
+        if "/" in t:
+            antes = t.split("/", 1)[0].strip()
+            if antes:
+                saida.append(antes)
+            break
+        saida.append(t)
+    return saida
+
+
 def _piloto_qualifying_de_tokens(tokens: list[str]) -> str:
     """Extrai só o nome do piloto (sem equipe) a partir dos tokens após posição/numeral."""
+    tokens = _so_titular(tokens)
     if not tokens:
         return ""
     if len(tokens) == 1:
@@ -319,14 +334,30 @@ def normalizar_pilotos_qualifying(
     return out
 
 
+_TEMPO_VOLTA_RE = re.compile(r"^\d{1,2}:\d{2}\.\d{3}$")
+
+
+def _tempo_q1_endurance(tokens: list[str]) -> str:
+    """Na Endurance as colunas de tempo são Q1+Q2, Q1 (titular) e Q2 (convidado)."""
+    tempos = [t for t in tokens if _TEMPO_VOLTA_RE.match(t)]
+    return tempos[1] if len(tempos) >= 2 else ""
+
+
 def extrair_qualifying_pdf(arquivo_pdf: str) -> pd.DataFrame | None:
-    """Extrai qualifying: tenta tabela estruturada; fallback para texto."""
+    """Extrai qualifying: tenta tabela estruturada; fallback para texto.
+
+    No formato Endurance (cabeçalho com "Q1+Q2") inclui a coluna "Tempo Q1".
+    """
     import pdfplumber
 
-    dados: list[tuple[str, str, str]] = []
+    dados: list[tuple[str, str, str, str]] = []
+    endurance = False
     try:
         with pdfplumber.open(arquivo_pdf) as pdf:
             pagina = pdf.pages[0]
+            texto = pagina.extract_text() or ""
+            endurance = "Q1+Q2" in texto.replace(" ", "")
+
             tabelas = pagina.extract_tables()
             if tabelas and tabelas[0]:
                 for linha in tabelas[0]:
@@ -341,21 +372,22 @@ def extrair_qualifying_pdf(arquivo_pdf: str) -> pd.DataFrame | None:
                     ]
                     piloto = _piloto_qualifying_de_tokens(tokens)
                     if piloto:
-                        dados.append((pos, no, piloto))
-                if dados:
-                    return pd.DataFrame(dados, columns=["Posição", "Numeral", "Piloto"])
+                        dados.append((pos, no, piloto, _tempo_q1_endurance(tokens)))
 
-            texto = pagina.extract_text() or ""
-            for linha in texto.split("\n"):
-                colunas = linha.split()
-                if colunas and colunas[0].isdigit() and len(colunas) >= 3:
-                    pos, no = colunas[0], colunas[1]
-                    name = _piloto_qualifying_de_tokens(colunas[2:])
-                    if name:
-                        dados.append((pos, no, name))
+            if not dados:
+                for linha in texto.split("\n"):
+                    colunas = linha.split()
+                    if colunas and colunas[0].isdigit() and len(colunas) >= 3:
+                        pos, no = colunas[0], colunas[1]
+                        name = _piloto_qualifying_de_tokens(colunas[2:])
+                        if name:
+                            dados.append((pos, no, name, _tempo_q1_endurance(colunas[2:])))
     except OSError:
         return None
 
     if not dados:
         return None
-    return pd.DataFrame(dados, columns=["Posição", "Numeral", "Piloto"])
+    df = pd.DataFrame(dados, columns=["Posição", "Numeral", "Piloto", "Tempo Q1"])
+    if not endurance:
+        df = df.drop(columns=["Tempo Q1"])
+    return df

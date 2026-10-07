@@ -1,6 +1,8 @@
 import pandas as pd
 
 from ranking_core import (
+    _piloto_qualifying_de_tokens,
+    _tempo_q1_endurance,
     colunas_protegidas_descarte,
     corridas_logicas_da_etapa,
     detectar_ultima_corrida,
@@ -52,3 +54,9 @@ def test_descarte_2026_ainda_sem_endurance():
         coluna_fn=str,
     )
     assert cols == set()
+
+
+def test_qualifying_endurance_so_titular_e_tempo_q1():
+    tokens = "CESAR RAMOS / NICOLAS COSTA MERCADO LIVRE RACING S 3:52.936 1:56.691 1:56.245".split()
+    assert _piloto_qualifying_de_tokens(tokens) == "Cesar Ramos"
+    assert _tempo_q1_endurance(tokens) == "1:56.691"
