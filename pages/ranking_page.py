@@ -1601,6 +1601,10 @@ def render_season_page(config: SeasonConfig) -> None:
             contagem_zona_inversao = {}
 
             for etapa, df in dados_qualifying.items():
+                # Endurance tem formato próprio (Q1 titular + Q2 convidado): só entra na média
+                match = re.search(r'\d+', etapa)
+                if match and int(match.group()) in config.endurance_etapas:
+                    continue
                 for index, row in df.iterrows():
                     piloto = row['Piloto']
                     posicao = int(row['Posição'])
