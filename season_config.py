@@ -132,6 +132,8 @@ def get_season_config(year: int) -> SeasonConfig:
             ),
             montadora_pontos_bonus={"Chevrolet": 2},
             montadora_soma_ajuste={"Mitsubishi": 4},
+            # Etapa 10: carro 30 (Cesar Ramos) quebrou o motor no qualy.
+            qualifying_excecoes={"Cesar Ramos": [10]},
             n_descartes=2,
             endurance_etapas=[9],
             proteger_ultimas_concluidas=False,

@@ -1595,18 +1595,30 @@ def render_season_page(config: SeasonConfig) -> None:
 
     with tabs[8]:
 
+        # Exceções de amostragem: Endurance (todas) + etapas por piloto (ex.: quebra do #30).
+        excecoes = config.qualifying_excecoes
+
+        def _etapa_fora_amostra_qualifying(etapa_num: int, piloto: str | None = None) -> bool:
+            if etapa_num in config.endurance_etapas:
+                return True
+            if piloto is not None and etapa_num in excecoes.get(piloto, []):
+                return True
+            return False
+
         def contar_avancos(dados_qualifying):
             contagem_avanco_q2 = {}
             contagem_avanco_q3 = {}
             contagem_zona_inversao = {}
 
             for etapa, df in dados_qualifying.items():
-                # Endurance tem formato próprio (Q1 titular + Q2 convidado): só entra na média
                 match = re.search(r'\d+', etapa)
-                if match and int(match.group()) in config.endurance_etapas:
+                etapa_num = int(match.group()) if match else None
+                if etapa_num is not None and _etapa_fora_amostra_qualifying(etapa_num):
                     continue
                 for index, row in df.iterrows():
                     piloto = row['Piloto']
+                    if etapa_num is not None and _etapa_fora_amostra_qualifying(etapa_num, piloto):
+                        continue
                     posicao = int(row['Posição'])
 
                     if posicao <= 20:  # Avançou para Q2
@@ -1626,20 +1638,17 @@ def render_season_page(config: SeasonConfig) -> None:
 
             return contagem_avanco_q2, contagem_avanco_q3, contagem_zona_inversao
 
-        # Dicionário de exceções — etapas que não devem contar para o cálculo médio
-        excecoes = config.qualifying_excecoes
-
         def calcular_estatisticas(dados_qualifying, piloto_selecionado):
             posicoes = []
-            etapas_excluidas = excecoes.get(piloto_selecionado, [])
 
             for etapa, df in dados_qualifying.items():
                 # Extrai o número da etapa a partir da string da chave ("Etapa 8" → 8)
                 match = re.search(r'\d+', etapa)
                 etapa_num = int(match.group()) if match else etapa
 
-                # Ignora a etapa se estiver nas exceções do piloto
-                if etapa_num in etapas_excluidas:
+                if isinstance(etapa_num, int) and _etapa_fora_amostra_qualifying(
+                    etapa_num, piloto_selecionado
+                ):
                     continue
 
                 # Filtra os dados do piloto
@@ -1680,18 +1689,22 @@ def render_season_page(config: SeasonConfig) -> None:
         # Gráfico de Performance Qualifying
         st.markdown("<h2 style='text-align: center;'>Performance de Qualifying</h2>",
                     unsafe_allow_html=True)
-        # Filtra as etapas e posições do piloto selecionado
-        etapas = list(dados_qualifying.keys())
+        # Filtra as etapas e posições do piloto selecionado (respeita exclusões da amostragem)
+        etapas = []
         posicoes = []
 
-        for etapa in etapas:
-            df_etapa = dados_qualifying[etapa]
+        for etapa, df_etapa in dados_qualifying.items():
+            match = re.search(r'\d+', etapa)
+            etapa_num = int(match.group()) if match else None
+            if etapa_num is not None and _etapa_fora_amostra_qualifying(
+                etapa_num, piloto_selecionado
+            ):
+                continue
+            etapas.append(etapa)
             piloto_data = df_etapa[df_etapa['Piloto'] == piloto_selecionado]
             if not piloto_data.empty:
-                posicao = int(piloto_data['Posição'].values[0])
-                posicoes.append(posicao)
+                posicoes.append(int(piloto_data['Posição'].values[0]))
             else:
-                # Adiciona None para etapas que o piloto não participou
                 posicoes.append(None)
 
         # Criando o gráfico interativo com Plotly
