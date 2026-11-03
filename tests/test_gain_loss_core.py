@@ -9,6 +9,7 @@ from gain_loss_core import (
     extrair_grid_pdf,
     extrair_lap_chart_csv,
     ranking_medio_gl_volta1,
+    ranking_pista_gl_volta1,
 )
 
 
@@ -84,3 +85,14 @@ def test_dnf_nao_entra_gl_corrida():
     row = df[(df["Etapa"] == 5) & (df["Tipo"] == "Principal") & (df["Numeral"] == 30)]
     assert not row.empty
     assert row["G/L Corrida"].isna().all()
+
+
+def test_pista_usa_apenas_gl_positivo():
+    if not PASTA.is_dir():
+        return
+    df = dataframe_registros(carregar_gain_loss_2026(PASTA, {}))
+    ranking = ranking_pista_gl_volta1(df)
+    assert "Média posições ganhas" in ranking.columns
+    assert "Total posições ganhas" in ranking.columns
+    assert (ranking["Média posições ganhas"] >= 0).all()
+    assert (ranking["Total posições ganhas"] >= 0).all()

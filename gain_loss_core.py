@@ -519,40 +519,51 @@ def ranking_medio_gl_volta1(df):
     return g.sort_values("Média G/L 1ª Volta", ascending=False).reset_index(drop=True)
 
 
-def ranking_pista_gl_corrida(df, tipo: str):
-    """Uma linha por pista: média G/L de corrida naquele traçado."""
+def _ranking_pista_posicoes_ganhas(df, col_gl: str):
+    """
+    Ranking por pista usando só G/L positivo (posições ganhas).
+
+    A média líquida se anula no grid; aqui medimos movimentação:
+    max(0, G/L) por amostra.
+    """
     import pandas as pd
 
-    sub = df[df["Tipo"] == tipo]
+    sub = df.dropna(subset=[col_gl]).copy()
+    if sub.empty:
+        return pd.DataFrame(
+            columns=[
+                "Pista",
+                "Média posições ganhas",
+                "Total posições ganhas",
+                "Amostras",
+                "Etapas",
+            ]
+        )
+
+    sub["Posições ganhas"] = sub[col_gl].clip(lower=0)
     g = (
         sub.groupby("Pista", as_index=False)
         .agg(
             **{
-                "Média G/L Corrida": ("G/L Corrida", "mean"),
-                "Amostras": ("G/L Corrida", "count"),
+                "Média posições ganhas": ("Posições ganhas", "mean"),
+                "Total posições ganhas": ("Posições ganhas", "sum"),
+                "Amostras": ("Posições ganhas", "count"),
                 "Etapas": ("Etapa", "nunique"),
             }
         )
     )
-    g = g.dropna(subset=["Média G/L Corrida"])
-    g["Média G/L Corrida"] = g["Média G/L Corrida"].round(1)
-    return g.sort_values("Média G/L Corrida", ascending=False).reset_index(drop=True)
+    g["Média posições ganhas"] = g["Média posições ganhas"].round(1)
+    g["Total posições ganhas"] = g["Total posições ganhas"].round(0).astype(int)
+    return g.sort_values(
+        "Média posições ganhas", ascending=False
+    ).reset_index(drop=True)
+
+
+def ranking_pista_gl_corrida(df, tipo: str):
+    """Uma linha por pista: posições ganhas na corrida (só G/L > 0)."""
+    return _ranking_pista_posicoes_ganhas(df[df["Tipo"] == tipo], "G/L Corrida")
 
 
 def ranking_pista_gl_volta1(df):
-    """Uma linha por pista: média G/L da 1ª volta (Sprint + Principal)."""
-    import pandas as pd
-
-    g = (
-        df.groupby("Pista", as_index=False)
-        .agg(
-            **{
-                "Média G/L 1ª Volta": ("G/L Volta 1", "mean"),
-                "Amostras": ("G/L Volta 1", "count"),
-                "Etapas": ("Etapa", "nunique"),
-            }
-        )
-    )
-    g = g.dropna(subset=["Média G/L 1ª Volta"])
-    g["Média G/L 1ª Volta"] = g["Média G/L 1ª Volta"].round(1)
-    return g.sort_values("Média G/L 1ª Volta", ascending=False).reset_index(drop=True)
+    """Uma linha por pista: posições ganhas na 1ª volta (Sprint + Principal)."""
+    return _ranking_pista_posicoes_ganhas(df, "G/L Volta 1")

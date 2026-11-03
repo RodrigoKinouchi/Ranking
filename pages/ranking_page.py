@@ -2138,29 +2138,34 @@ def render_season_page(config: SeasonConfig) -> None:
                     )
 
             else:  # Pista
-                st.subheader("Média G/L corrida Sprint por pista")
+                st.caption(
+                    "Nas tabelas por pista usamos só posições ganhas (G/L > 0), "
+                    "para a média não se anular entre quem sobe e quem desce."
+                )
+
+                st.subheader("Posições ganhas — corrida Sprint por pista")
                 df_ps = ranking_pista_gl_corrida(df_gl, "Sprint")
                 if not df_ps.empty:
                     df_ps.insert(0, "Ranking", range(1, len(df_ps) + 1))
                     _exibir_dataframe(
-                        df_ps.style.format({"Média G/L Corrida": "{:.1f}"}),
+                        df_ps.style.format({"Média posições ganhas": "{:.1f}"}),
                         hide_index=True,
                     )
 
-                st.subheader("Média G/L corrida Principal por pista")
+                st.subheader("Posições ganhas — corrida Principal por pista")
                 df_pp = ranking_pista_gl_corrida(df_gl, "Principal")
                 if not df_pp.empty:
                     df_pp.insert(0, "Ranking", range(1, len(df_pp) + 1))
                     _exibir_dataframe(
-                        df_pp.style.format({"Média G/L Corrida": "{:.1f}"}),
+                        df_pp.style.format({"Média posições ganhas": "{:.1f}"}),
                         hide_index=True,
                     )
 
-                st.subheader("Média G/L 1ª volta por pista")
+                st.subheader("Posições ganhas — 1ª volta por pista")
                 df_pv = ranking_pista_gl_volta1(df_gl)
                 if not df_pv.empty:
                     df_pv.insert(0, "Ranking", range(1, len(df_pv) + 1))
                     _exibir_dataframe(
-                        df_pv.style.format({"Média G/L 1ª Volta": "{:.1f}"}),
+                        df_pv.style.format({"Média posições ganhas": "{:.1f}"}),
                         hide_index=True,
                     )
