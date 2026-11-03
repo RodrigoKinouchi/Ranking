@@ -26,6 +26,15 @@ PISTA_POR_ETAPA_2026 = {
 # Numerais fora da amostragem (convidados / one-off).
 NUMERAIS_EXCLUIDOS_GAIN_LOSS = {54, 72}
 
+# G/L 1ª volta fora da média (incidente/abandono injusto para performance).
+# Mantém o valor na tabela do piloto com "*", mas não entra em médias/rankings.
+# Tupla: (numeral, etapa, tipo).
+IGNORAR_GL_VOLTA1: set[tuple[int, int, str]] = {
+    (21, 2, "Sprint"),  # Thiago Camilo — Cascavel
+    (21, 4, "Sprint"),  # Thiago Camilo — Goiânia
+    (21, 5, "Principal"),  # Thiago Camilo — Cuiabá
+}
+
 # Garante nome mesmo se a tabela do campeonato não tiver o numeral.
 ALIASES_NUMERAL_PILOTO = {
     33: "Nelson Piquet Jr",
@@ -399,6 +408,10 @@ def carregar_gain_loss_2026(
     return registros
 
 
+def _ignorar_gl_volta1(numeral: int, etapa: int, tipo: str) -> bool:
+    return (int(numeral), int(etapa), str(tipo)) in IGNORAR_GL_VOLTA1
+
+
 def dataframe_registros(registros: list[RaceGainLoss]):
     import pandas as pd
 
@@ -416,6 +429,7 @@ def dataframe_registros(registros: list[RaceGainLoss]):
                 "Chegada": r.chegada,
                 "G/L Volta 1": r.gl_volta1,
                 "G/L Corrida": r.gl_corrida,
+                "Ignorar V1": _ignorar_gl_volta1(r.numeral, r.etapa, r.tipo),
             }
         )
     return pd.DataFrame(rows)
@@ -428,6 +442,26 @@ def _media(series):
     return float(s.mean())
 
 
+def _mascara_amostra_v1(df):
+    """True nas linhas que entram na média de G/L 1ª volta."""
+    import pandas as pd
+
+    ok = df["G/L Volta 1"].notna()
+    if "Ignorar V1" in df.columns:
+        ok = ok & ~df["Ignorar V1"].fillna(False)
+    return ok
+
+
+def _fmt_gl_v1(valor, ignorar: bool):
+    """Mantém o número na tabela; '*' marca amostra fora da média."""
+    import pandas as pd
+
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return None
+    texto = str(int(valor))
+    return f"{texto}*" if ignorar else texto
+
+
 def metricas_piloto(df, piloto: str) -> dict:
     """Métricas resumidas para a visão Piloto."""
     import pandas as pd
@@ -435,12 +469,13 @@ def metricas_piloto(df, piloto: str) -> dict:
     p = df[df["Piloto"] == piloto]
     sprint = p[p["Tipo"] == "Sprint"]
     principal = p[p["Tipo"] == "Principal"]
+    v1 = p.loc[_mascara_amostra_v1(p), "G/L Volta 1"]
     return {
         "Média largada Sprint": _media(sprint["Largada"]),
         "Média G/L corrida Sprint": _media(sprint["G/L Corrida"]),
         "Média largada Principal": _media(principal["Largada"]),
         "Média G/L corrida Principal": _media(principal["G/L Corrida"]),
-        "Média G/L 1ª volta": _media(p["G/L Volta 1"]),
+        "Média G/L 1ª volta": _media(v1),
     }
 
 
@@ -454,6 +489,13 @@ def tabela_piloto_por_etapa(df, piloto: str):
         pista = g["Pista"].iloc[0]
         s = g[g["Tipo"] == "Sprint"]
         m = g[g["Tipo"] == "Principal"]
+
+        def _celula(bloco, col_gl: str):
+            if bloco.empty or pd.isna(bloco[col_gl].iloc[0]):
+                return None
+            ignorar = bool(bloco["Ignorar V1"].iloc[0]) if "Ignorar V1" in bloco.columns else False
+            return _fmt_gl_v1(bloco[col_gl].iloc[0], ignorar)
+
         rows.append(
             {
                 "Etapa": int(etapa),
@@ -462,16 +504,12 @@ def tabela_piloto_por_etapa(df, piloto: str):
                 "Fim V1 Sprint": int(s["Fim Volta 1"].iloc[0])
                 if not s.empty and pd.notna(s["Fim Volta 1"].iloc[0])
                 else None,
-                "G/L V1 Sprint": int(s["G/L Volta 1"].iloc[0])
-                if not s.empty and pd.notna(s["G/L Volta 1"].iloc[0])
-                else None,
+                "G/L V1 Sprint": _celula(s, "G/L Volta 1"),
                 "Largada Principal": int(m["Largada"].iloc[0]) if not m.empty else None,
                 "Fim V1 Principal": int(m["Fim Volta 1"].iloc[0])
                 if not m.empty and pd.notna(m["Fim Volta 1"].iloc[0])
                 else None,
-                "G/L V1 Principal": int(m["G/L Volta 1"].iloc[0])
-                if not m.empty and pd.notna(m["G/L Volta 1"].iloc[0])
-                else None,
+                "G/L V1 Principal": _celula(m, "G/L Volta 1"),
             }
         )
     out = pd.DataFrame(rows)
@@ -502,11 +540,12 @@ def ranking_medio_gl_corrida(df, tipo: str):
 
 
 def ranking_medio_gl_volta1(df):
-    """Ranking geral: média G/L da 1ª volta (todas as corridas)."""
+    """Ranking geral: média G/L da 1ª volta (exclui amostras marcadas)."""
     import pandas as pd
 
+    sub = df.loc[_mascara_amostra_v1(df)].copy()
     g = (
-        df.groupby("Piloto", as_index=False)
+        sub.groupby("Piloto", as_index=False)
         .agg(
             **{
                 "Média G/L 1ª Volta": ("G/L Volta 1", "mean"),
@@ -565,5 +604,6 @@ def ranking_pista_gl_corrida(df, tipo: str):
 
 
 def ranking_pista_gl_volta1(df):
-    """Uma linha por pista: posições ganhas na 1ª volta (Sprint + Principal)."""
-    return _ranking_pista_posicoes_ganhas(df, "G/L Volta 1")
+    """Uma linha por pista: posições ganhas na 1ª volta (exclui amostras marcadas)."""
+    sub = df.loc[_mascara_amostra_v1(df)] if "Ignorar V1" in df.columns else df
+    return _ranking_pista_posicoes_ganhas(sub, "G/L Volta 1")

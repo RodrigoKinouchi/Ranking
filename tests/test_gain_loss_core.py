@@ -2,14 +2,17 @@ from pathlib import Path
 
 from gain_loss_core import (
     ETAPAS_GAIN_LOSS_2026,
+    IGNORAR_GL_VOLTA1,
     _resolve_grid_path,
     _resolve_lap_path,
     carregar_gain_loss_2026,
     dataframe_registros,
     extrair_grid_pdf,
     extrair_lap_chart_csv,
+    metricas_piloto,
     ranking_medio_gl_volta1,
     ranking_pista_gl_volta1,
+    tabela_piloto_por_etapa,
 )
 
 
@@ -96,3 +99,46 @@ def test_pista_usa_apenas_gl_positivo():
     assert "Total posições ganhas" in ranking.columns
     assert (ranking["Média posições ganhas"] >= 0).all()
     assert (ranking["Total posições ganhas"] >= 0).all()
+
+
+def test_camilo_incidentes_fora_da_media_com_asterisco():
+    """Sprint ET2/ET4 e Principal ET5 do #21 ficam na tabela com * e fora da média."""
+    if not PASTA.is_dir():
+        return
+    assert (21, 2, "Sprint") in IGNORAR_GL_VOLTA1
+    assert (21, 4, "Sprint") in IGNORAR_GL_VOLTA1
+    assert (21, 5, "Principal") in IGNORAR_GL_VOLTA1
+
+    regs = carregar_gain_loss_2026(
+        PASTA, mapa_numeral_piloto={21: "Thiago Camilo"}
+    )
+    df = dataframe_registros(regs)
+    camilo = df[df["Numeral"] == 21]
+    assert not camilo.empty
+
+    marcadas = camilo[camilo["Ignorar V1"]]
+    assert len(marcadas) == 3
+    assert set(zip(marcadas["Etapa"], marcadas["Tipo"])) == {
+        (2, "Sprint"),
+        (4, "Sprint"),
+        (5, "Principal"),
+    }
+
+    tabela = tabela_piloto_por_etapa(df, "Thiago Camilo")
+    row2 = tabela[tabela["Etapa"] == 2].iloc[0]
+    row4 = tabela[tabela["Etapa"] == 4].iloc[0]
+    row5 = tabela[tabela["Etapa"] == 5].iloc[0]
+    assert str(row2["G/L V1 Sprint"]).endswith("*")
+    assert str(row4["G/L V1 Sprint"]).endswith("*")
+    assert str(row5["G/L V1 Principal"]).endswith("*")
+
+    # Média V1 do piloto ignora as 3 amostras marcadas
+    mets = metricas_piloto(df, "Thiago Camilo")
+    validas = camilo.loc[~camilo["Ignorar V1"] & camilo["G/L Volta 1"].notna(), "G/L Volta 1"]
+    assert mets["Média G/L 1ª volta"] == float(validas.mean())
+
+    # Ranking geral também exclui as marcadas
+    ranking = ranking_medio_gl_volta1(df)
+    row_rank = ranking[ranking["Piloto"] == "Thiago Camilo"]
+    assert not row_rank.empty
+    assert int(row_rank.iloc[0]["Amostras"]) == len(validas)

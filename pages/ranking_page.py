@@ -2155,6 +2155,10 @@ def render_season_page(config: SeasonConfig) -> None:
                 _painel_metricas_gain_loss(mets)
 
                 st.subheader(f"G/L 1ª volta por etapa — {piloto_gl}")
+                st.caption(
+                    "* = amostra fora da média (incidente/abandono na 1ª volta); "
+                    "o valor permanece na tabela, mas não entra nas estatísticas."
+                )
                 df_etapas_gl = tabela_piloto_por_etapa(df_gl, piloto_gl)
                 if not df_etapas_gl.empty:
                     _exibir_dataframe(df_etapas_gl, hide_index=True)
