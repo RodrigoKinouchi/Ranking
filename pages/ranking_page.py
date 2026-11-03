@@ -2160,10 +2160,18 @@ def render_season_page(config: SeasonConfig) -> None:
                     "o valor permanece na tabela, mas não entra nas estatísticas."
                 )
                 df_etapas_gl = tabela_piloto_por_etapa(df_gl, piloto_gl)
-                if not df_etapas_gl.empty:
-                    _exibir_dataframe(df_etapas_gl, hide_index=True)
-                else:
-                    st.info("Sem dados de 1ª volta para este piloto.")
+                col_tab, col_foto = st.columns([5, 1])
+                with col_tab:
+                    if not df_etapas_gl.empty:
+                        _exibir_dataframe(df_etapas_gl, hide_index=True)
+                    else:
+                        st.info("Sem dados de 1ª volta para este piloto.")
+                with col_foto:
+                    st.image(
+                        carregar_imagem_piloto(piloto_gl),
+                        caption=piloto_gl,
+                        width=150,
+                    )
 
             elif modo_gl == "Geral":
                 st.subheader("Média G/L corrida Sprint")
