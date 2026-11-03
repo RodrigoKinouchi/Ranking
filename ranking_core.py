@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import io
 import os
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -274,9 +276,17 @@ def caminho_imagem_piloto(nome_piloto: str) -> str:
     return str(escolhido.as_posix())
 
 
-def carregar_imagem_piloto(nome_piloto: str) -> Image.Image:
-    """Abre a foto do piloto via PIL (padrão confiável no st.image / Cloud)."""
-    return Image.open(caminho_imagem_piloto(nome_piloto))
+@lru_cache(maxsize=128)
+def uri_imagem_piloto(nome_piloto: str) -> str:
+    """Data-URI da foto — bypassa o MediaFileManager (bug do '0' no Cloud)."""
+    data = Path(caminho_imagem_piloto(nome_piloto)).read_bytes()
+    b64 = base64.b64encode(data).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+
+def carregar_imagem_piloto(nome_piloto: str) -> str:
+    """Retorna data-URI pronta para st.image (evita endpoint /media quebrado)."""
+    return uri_imagem_piloto(nome_piloto)
 
 
 def _parece_token_equipe(token: str) -> bool:
