@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -45,11 +46,25 @@ def _exibir_dataframe(df, **kwargs):
     st.dataframe(df, **kwargs)
 
 
+def _assinatura_arquivos_gain_loss(pasta: str) -> tuple[tuple[str, float], ...]:
+    """Mtimes dos arquivos da pasta — invalida o cache quando o CSV/PDF muda."""
+    root = Path(pasta)
+    if not root.is_dir():
+        return ()
+    itens: list[tuple[str, float]] = []
+    for p in sorted(root.rglob("*")):
+        if p.is_file() and p.suffix.lower() in {".csv", ".pdf", ".xlsx"}:
+            itens.append((p.name, p.stat().st_mtime))
+    return tuple(itens)
+
+
 @st.cache_data(show_spinner="Carregando dados de Gain/Loss…")
 def _carregar_df_gain_loss_cached(
-    pasta: str, mapa_items: tuple[tuple[int, str], ...]
+    pasta: str,
+    mapa_items: tuple[tuple[int, str], ...],
+    _assinatura: tuple[tuple[str, float], ...] = (),
 ) -> pd.DataFrame:
-    """Cacheia o parse pesado de PDFs/CSVs (primeira carga ~1x por sessão)."""
+    """Cacheia o parse pesado de PDFs/CSVs (invalida se arquivos mudarem)."""
     regs = carregar_gain_loss_2026(pasta, mapa_numeral_piloto=dict(mapa_items))
     return dataframe_registros(regs)
 
@@ -2114,7 +2129,11 @@ def render_season_page(config: SeasonConfig) -> None:
             )
 
             try:
-                df_gl = _carregar_df_gain_loss_cached(config.gainloss_dir, mapa_items)
+                df_gl = _carregar_df_gain_loss_cached(
+                    config.gainloss_dir,
+                    mapa_items,
+                    _assinatura_arquivos_gain_loss(config.gainloss_dir),
+                )
             except OSError as exc:
                 st.error(f"Não foi possível carregar os dados de Gain/Loss: {exc}")
                 df_gl = pd.DataFrame()
