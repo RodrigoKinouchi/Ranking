@@ -108,6 +108,8 @@ class SeasonConfig:
     # {nome_equipe_virtual: [pilotos]} — soma pontos dos pilotos e entra na aba Equipes.
     equipes_virtuais: dict[str, list[str]] = field(default_factory=dict)
     equipes_cor: dict[str, str] = field(default_factory=dict)
+    # Pasta com grids / lap charts / resultados para aba Gain/Loss (só 2026 por enquanto).
+    gainloss_dir: str | None = None
 
 
 def get_season_config(year: int) -> SeasonConfig:
@@ -142,6 +144,7 @@ def get_season_config(year: int) -> SeasonConfig:
                 "ML Racing (TC + CR)": ["Thiago Camilo", "Cesar Ramos"],
             },
             equipes_cor=EQUIPES_COR_2026,
+            gainloss_dir="gainlossfirstlap/",
         ),
     }
     if year not in configs:

@@ -13,6 +13,15 @@ import plotly.graph_objs as go
 import streamlit as st
 from PIL import Image
 
+from gain_loss_core import (
+    carregar_gain_loss_2026,
+    dataframe_registros,
+    metricas_piloto,
+    ranking_medio_gl_corrida,
+    ranking_medio_gl_volta1,
+    ranking_pista_gl_corrida,
+    tabela_piloto_por_etapa,
+)
 from ranking_core import (
     caminho_imagem_piloto,
     colunas_protegidas_descarte,
@@ -548,9 +557,14 @@ def render_season_page(config: SeasonConfig) -> None:
 
 
     # Criando abas de visualização
-    tabs = st.tabs(['Pilotos', 'Equipes', 'Sprint',
-                   'Principal', 'Análise de consistência', 'Montadora', 'Pódios',
-                    'Resultados qualifyings', 'Estatisticas de qualifying', 'Comparação','Cortez'])
+    _tab_names = [
+        'Pilotos', 'Equipes', 'Sprint', 'Principal', 'Análise de consistência',
+        'Montadora', 'Pódios', 'Resultados qualifyings', 'Estatisticas de qualifying',
+        'Comparação', 'Cortez',
+    ]
+    if config.year == 2026 and config.gainloss_dir:
+        _tab_names.append('Gain/Loss')
+    tabs = st.tabs(_tab_names)
 
     with tabs[0]:
 
@@ -1944,3 +1958,125 @@ def render_season_page(config: SeasonConfig) -> None:
                 df_recorte_sem_descarte = df_recorte.drop(columns=['Descarte'])
                 styled_df_recorte = df_recorte_sem_descarte.style.apply(colorir_piloto, axis=1)
                 _exibir_dataframe(styled_df_recorte, hide_index=True)
+
+    if config.year == 2026 and config.gainloss_dir:
+        with tabs[-1]:
+            st.markdown(
+                "<h2 style='text-align: center;'>Gain / Loss — 1ª volta e corrida</h2>",
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "G/L positivo = posições ganhas (largada − posição). "
+                "Etapa 9 (Endurance) fora da amostragem. "
+                "G/L de corrida usa o resultado oficial (com punições)."
+            )
+
+            modo_gl = st.radio(
+                "Visualizar estatísticas por:",
+                ["Piloto", "Geral", "Pista"],
+                horizontal=True,
+                key=f"gainloss_modo_{config.year}",
+            )
+
+            mapa_numeral = (
+                df.assign(Numeral=pd.to_numeric(df["Numeral"], errors="coerce"))
+                .dropna(subset=["Numeral"])
+                .drop_duplicates("Numeral", keep="first")
+                .set_index("Numeral")["Piloto"]
+                .to_dict()
+            )
+            mapa_numeral = {int(k): str(v) for k, v in mapa_numeral.items()}
+
+            try:
+                regs_gl = carregar_gain_loss_2026(
+                    config.gainloss_dir, mapa_numeral_piloto=mapa_numeral
+                )
+                df_gl = dataframe_registros(regs_gl)
+            except OSError as exc:
+                st.error(f"Não foi possível carregar os dados de Gain/Loss: {exc}")
+                df_gl = pd.DataFrame()
+
+            if df_gl.empty:
+                st.warning("Nenhum dado de Gain/Loss encontrado na pasta configurada.")
+            elif modo_gl == "Piloto":
+                pilotos_gl = sorted(df_gl["Piloto"].dropna().unique().tolist())
+                piloto_gl = st.selectbox(
+                    "Escolha o piloto:",
+                    pilotos_gl,
+                    key=f"gainloss_piloto_{config.year}",
+                )
+                mets = metricas_piloto(df_gl, piloto_gl)
+
+                def _fmt_metric(v):
+                    if v is None:
+                        return "N/A"
+                    return f"{v:.2f}"
+
+                c1, c2, c3, c4, c5 = st.columns(5)
+                with c1:
+                    st.metric("Média largada Sprint", _fmt_metric(mets["Média largada Sprint"]))
+                with c2:
+                    st.metric(
+                        "Média G/L corrida Sprint",
+                        _fmt_metric(mets["Média G/L corrida Sprint"]),
+                    )
+                with c3:
+                    st.metric(
+                        "Média largada Principal",
+                        _fmt_metric(mets["Média largada Principal"]),
+                    )
+                with c4:
+                    st.metric(
+                        "Média G/L corrida Principal",
+                        _fmt_metric(mets["Média G/L corrida Principal"]),
+                    )
+                with c5:
+                    st.metric(
+                        "Média G/L 1ª volta",
+                        _fmt_metric(mets["Média G/L 1ª volta"]),
+                    )
+
+                st.subheader(f"G/L 1ª volta por etapa — {piloto_gl}")
+                df_etapas_gl = tabela_piloto_por_etapa(df_gl, piloto_gl)
+                if not df_etapas_gl.empty:
+                    _exibir_dataframe(df_etapas_gl, hide_index=True)
+                else:
+                    st.info("Sem dados de 1ª volta para este piloto.")
+
+            elif modo_gl == "Geral":
+                st.subheader("Média G/L corrida Sprint")
+                df_s = ranking_medio_gl_corrida(df_gl, "Sprint")
+                if not df_s.empty:
+                    df_s.insert(0, "Ranking", range(1, len(df_s) + 1))
+                    _exibir_dataframe(
+                        df_s.style.apply(colorir_piloto, axis=1), hide_index=True
+                    )
+
+                st.subheader("Média G/L corrida Principal")
+                df_p = ranking_medio_gl_corrida(df_gl, "Principal")
+                if not df_p.empty:
+                    df_p.insert(0, "Ranking", range(1, len(df_p) + 1))
+                    _exibir_dataframe(
+                        df_p.style.apply(colorir_piloto, axis=1), hide_index=True
+                    )
+
+                st.subheader("Média G/L 1ª volta")
+                df_v1 = ranking_medio_gl_volta1(df_gl)
+                if not df_v1.empty:
+                    df_v1.insert(0, "Ranking", range(1, len(df_v1) + 1))
+                    _exibir_dataframe(
+                        df_v1.style.apply(colorir_piloto, axis=1), hide_index=True
+                    )
+
+            else:  # Pista
+                st.subheader("Média G/L corrida Sprint por pista")
+                df_ps = ranking_pista_gl_corrida(df_gl, "Sprint")
+                if not df_ps.empty:
+                    df_ps.insert(0, "Ranking", range(1, len(df_ps) + 1))
+                    _exibir_dataframe(df_ps, hide_index=True)
+
+                st.subheader("Média G/L corrida Principal por pista")
+                df_pp = ranking_pista_gl_corrida(df_gl, "Principal")
+                if not df_pp.empty:
+                    df_pp.insert(0, "Ranking", range(1, len(df_pp) + 1))
+                    _exibir_dataframe(df_pp, hide_index=True)
