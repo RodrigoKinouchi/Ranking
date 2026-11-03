@@ -97,6 +97,8 @@ def _painel_metricas_gain_loss(mets: dict) -> None:
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
+.gl-metric-card .gl-value.gl-pos { color: #1b7f3a; }
+.gl-metric-card .gl-value.gl-neg { color: #c62828; }
 </style>
         """,
         unsafe_allow_html=True,
@@ -107,19 +109,30 @@ def _painel_metricas_gain_loss(mets: dict) -> None:
             return "N/A"
         return f"{v:.2f}"
 
+    def _cls_gl(v, is_gl: bool) -> str:
+        if not is_gl or v is None:
+            return ""
+        if v > 0:
+            return "gl-pos"
+        if v < 0:
+            return "gl-neg"
+        return ""
+
     cards = [
-        ("Média largada Sprint", mets["Média largada Sprint"]),
-        ("Média G/L corrida Sprint", mets["Média G/L corrida Sprint"]),
-        ("Média largada Principal", mets["Média largada Principal"]),
-        ("Média G/L corrida Principal", mets["Média G/L corrida Principal"]),
-        ("Média G/L 1ª volta", mets["Média G/L 1ª volta"]),
+        ("Média largada Sprint", mets["Média largada Sprint"], False),
+        ("Média G/L corrida Sprint", mets["Média G/L corrida Sprint"], True),
+        ("Média largada Principal", mets["Média largada Principal"], False),
+        ("Média G/L corrida Principal", mets["Média G/L corrida Principal"], True),
+        ("Média G/L 1ª volta", mets["Média G/L 1ª volta"], True),
     ]
     html = ['<div class="gl-metrics-wrap">']
-    for label, value in cards:
+    for label, value, is_gl in cards:
+        cls = _cls_gl(value, is_gl)
+        cls_attr = f" {cls}" if cls else ""
         html.append(
             "<div class='gl-metric-card'>"
             f"<div class='gl-label'>{label}</div>"
-            f"<div class='gl-value'>{_fmt(value)}</div>"
+            f"<div class='gl-value{cls_attr}'>{_fmt(value)}</div>"
             "</div>"
         )
     html.append("</div>")
