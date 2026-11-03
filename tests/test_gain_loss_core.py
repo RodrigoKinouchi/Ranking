@@ -73,3 +73,14 @@ def test_exclui_numerais_e_usa_nomes():
         assert por_num.loc[33] == "Nelson Piquet Jr"
     if 51 in por_num.index:
         assert por_num.loc[51] == "Atila Abreu"
+
+
+def test_dnf_nao_entra_gl_corrida():
+    """NC conhecidos (ex.: Cesar #30 na Principal Cuiabá) sem G/L de corrida."""
+    if not PASTA.is_dir():
+        return
+    regs = carregar_gain_loss_2026(PASTA, mapa_numeral_piloto={30: "Cesar Ramos"})
+    df = dataframe_registros(regs)
+    row = df[(df["Etapa"] == 5) & (df["Tipo"] == "Principal") & (df["Numeral"] == 30)]
+    assert not row.empty
+    assert row["G/L Corrida"].isna().all()

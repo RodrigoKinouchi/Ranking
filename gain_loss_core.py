@@ -208,8 +208,12 @@ def extrair_lap_chart_csv(arquivo: str | Path) -> dict[int, dict[int, int]]:
     return out
 
 
+# Fração mínima das voltas do líder para considerar que "terminou" a corrida.
+_FRACAO_MIN_VOLTAS_TERMINOU = 0.75
+
+
 def extrair_resultado_pdf(arquivo: str | Path) -> dict[int, int]:
-    """Retorna {numeral: posição_oficial} da classificação (com punições)."""
+    """Retorna {numeral: posição_oficial} só de quem terminou (classificados)."""
     posicoes, _nomes = extrair_resultado_pdf_completo(arquivo)
     return posicoes
 
@@ -217,16 +221,33 @@ def extrair_resultado_pdf(arquivo: str | Path) -> dict[int, int]:
 def extrair_resultado_pdf_completo(
     arquivo: str | Path,
 ) -> tuple[dict[int, int], dict[int, str]]:
-    """Retorna (posições, nomes) da classificação oficial."""
+    """
+    Retorna (posições, nomes) da classificação oficial.
+
+    Ignora Not classified / DQ. Também descarta quem completou menos de
+    75% das voltas do líder (abandono precoce mesmo que ainda classificado).
+    """
     path = Path(arquivo)
-    order: list[tuple[int, str]] = []
+    order: list[tuple[int, str, int | None]] = []  # numeral, nome, laps
+
     with pdfplumber.open(path) as pdf:
         for page in pdf.pages:
             for table in page.extract_tables() or []:
-                for row in table:
+                if not table:
+                    continue
+                header = " ".join(str(c or "") for c in table[0]).lower()
+                # Só a tabela principal de classificados
+                if "not classified" in header or header.strip().startswith("dq"):
+                    continue
+                if "pos" not in header or "#" not in header:
+                    continue
+
+                for row in table[1:]:
                     if not row or not row[0]:
                         continue
-                    pos_s = str(row[0]).strip()
+                    pos_s = str(row[0]).strip().upper()
+                    if pos_s in {"DQ", "NC", "DNS", "DSQ"}:
+                        continue
                     if not pos_s.isdigit():
                         continue
                     if len(row) < 3:
@@ -237,15 +258,38 @@ def extrair_resultado_pdf_completo(
                     driver = str(row[2] or "")
                     if sum(ch.isalpha() for ch in driver) < 3:
                         continue
-                    order.append((int(num_s), _title_nome_piloto(driver)))
+
+                    laps_val: int | None = None
+                    # Coluna Laps costuma ser índice 5 no layout Timing
+                    for idx in (5, 4, 6):
+                        if idx < len(row) and row[idx] is not None:
+                            cand = str(row[idx]).strip()
+                            if cand.isdigit():
+                                laps_val = int(cand)
+                                break
+
+                    order.append((int(num_s), _title_nome_piloto(driver), laps_val))
+
+    if not order:
+        return {}, {}
+
+    laps_known = [lp for _, _, lp in order if lp is not None]
+    max_laps = max(laps_known) if laps_known else None
+    min_ok = (
+        int(max_laps * _FRACAO_MIN_VOLTAS_TERMINOU) if max_laps else None
+    )
+
     seen: set[int] = set()
     out: dict[int, int] = {}
     nomes: dict[int, str] = {}
     pos = 1
-    for n, nome in order:
+    for n, nome, lp in order:
         if n in seen:
             continue
         seen.add(n)
+        # Abandono / não terminou de fato
+        if min_ok is not None and lp is not None and lp < min_ok:
+            continue
         out[n] = pos
         if nome:
             nomes[n] = nome
@@ -257,21 +301,35 @@ def _chegada_de_fontes(
     resultado: dict[int, int] | None,
     laps: dict[int, dict[int, int]],
 ) -> dict[int, int]:
-    """Prefere resultado oficial; senão última volta 'cheia' do lap chart."""
-    if resultado:
+    """
+    Prefere resultado oficial (já filtrado).
+
+    Sem resultado: usa a última volta 'cheia' do lap chart, mas só carros
+    que ainda estavam na pista no fim (quem abandonou some do chart).
+    """
+    if resultado is not None:
+        # Mesmo vazio: não inventar chegada via lap chart se o PDF existe
         return resultado
     if not laps:
         return {}
-    # Evita voltas truncadas (ex.: só o líder)
     candidatas = sorted(
         ((lap, m) for lap, m in laps.items() if len(m) >= 8),
         key=lambda t: t[0],
     )
     if not candidatas:
-        # fallback absoluto: maior volta mesmo truncada
-        lap = max(laps)
-        return dict(laps[lap])
-    return dict(candidatas[-1][1])
+        return {}
+    ultima_lap, mapa_final = candidatas[-1]
+    # Exige presença também perto do fim (≥75% das voltas do chart)
+    limiar = max(1, int(ultima_lap * _FRACAO_MIN_VOLTAS_TERMINOU))
+    presentes_tarde: set[int] = set()
+    for lap_n, mapa in laps.items():
+        if lap_n >= limiar:
+            presentes_tarde.update(mapa.keys())
+    return {
+        num: pos
+        for num, pos in mapa_final.items()
+        if num in presentes_tarde
+    }
 
 
 def _resolver_nome_piloto(

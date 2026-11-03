@@ -2050,7 +2050,8 @@ def render_season_page(config: SeasonConfig) -> None:
             st.caption(
                 "G/L positivo = posições ganhas (largada − posição). "
                 "Etapa 9 (Endurance) fora da amostragem. "
-                "G/L de corrida usa o resultado oficial (com punições)."
+                "G/L de corrida usa o resultado oficial (com punições) e "
+                "ignora quem não terminou (NC/DQ ou menos de 75% das voltas)."
             )
 
             modo_gl = st.radio(
