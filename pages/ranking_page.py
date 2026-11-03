@@ -20,6 +20,7 @@ from gain_loss_core import (
     ranking_medio_gl_corrida,
     ranking_medio_gl_volta1,
     ranking_pista_gl_corrida,
+    ranking_pista_gl_volta1,
     tabela_piloto_por_etapa,
 )
 from ranking_core import (
@@ -41,6 +42,84 @@ def _exibir_dataframe(df, **kwargs):
     """Exibe tabela com largura proporcional ao conteúdo (não estica na página)."""
     kwargs.setdefault("use_container_width", False)
     st.dataframe(df, **kwargs)
+
+
+@st.cache_data(show_spinner="Carregando dados de Gain/Loss…")
+def _carregar_df_gain_loss_cached(
+    pasta: str, mapa_items: tuple[tuple[int, str], ...]
+) -> pd.DataFrame:
+    """Cacheia o parse pesado de PDFs/CSVs (primeira carga ~1x por sessão)."""
+    regs = carregar_gain_loss_2026(pasta, mapa_numeral_piloto=dict(mapa_items))
+    return dataframe_registros(regs)
+
+
+def _painel_metricas_gain_loss(mets: dict) -> None:
+    """Cards geométricos claros para as métricas da visão Piloto."""
+    st.markdown(
+        """
+<style>
+.gl-metrics-wrap {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.4rem 0 1.1rem 0;
+}
+@media (max-width: 1100px) {
+  .gl-metrics-wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .gl-metrics-wrap { grid-template-columns: 1fr; }
+}
+.gl-metric-card {
+  background: linear-gradient(180deg, #f7f7f8 0%, #efefef 100%);
+  border: 1px solid #d8d8d8;
+  border-radius: 14px;
+  padding: 0.95rem 1rem 1.05rem 1rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+  min-height: 92px;
+}
+.gl-metric-card .gl-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: #6b6b6b;
+  margin-bottom: 0.45rem;
+  line-height: 1.25;
+  font-weight: 600;
+}
+.gl-metric-card .gl-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #2a2a2a;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    def _fmt(v):
+        if v is None:
+            return "N/A"
+        return f"{v:.1f}"
+
+    cards = [
+        ("Média largada Sprint", mets["Média largada Sprint"]),
+        ("Média G/L corrida Sprint", mets["Média G/L corrida Sprint"]),
+        ("Média largada Principal", mets["Média largada Principal"]),
+        ("Média G/L corrida Principal", mets["Média G/L corrida Principal"]),
+        ("Média G/L 1ª volta", mets["Média G/L 1ª volta"]),
+    ]
+    html = ['<div class="gl-metrics-wrap">']
+    for label, value in cards:
+        html.append(
+            "<div class='gl-metric-card'>"
+            f"<div class='gl-label'>{label}</div>"
+            f"<div class='gl-value'>{_fmt(value)}</div>"
+            "</div>"
+        )
+    html.append("</div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
 
 
 def render_season_page(config: SeasonConfig) -> None:
@@ -1985,13 +2064,12 @@ def render_season_page(config: SeasonConfig) -> None:
                 .set_index("Numeral")["Piloto"]
                 .to_dict()
             )
-            mapa_numeral = {int(k): str(v) for k, v in mapa_numeral.items()}
+            mapa_items = tuple(
+                sorted((int(k), str(v)) for k, v in mapa_numeral.items())
+            )
 
             try:
-                regs_gl = carregar_gain_loss_2026(
-                    config.gainloss_dir, mapa_numeral_piloto=mapa_numeral
-                )
-                df_gl = dataframe_registros(regs_gl)
+                df_gl = _carregar_df_gain_loss_cached(config.gainloss_dir, mapa_items)
             except OSError as exc:
                 st.error(f"Não foi possível carregar os dados de Gain/Loss: {exc}")
                 df_gl = pd.DataFrame()
@@ -1999,42 +2077,18 @@ def render_season_page(config: SeasonConfig) -> None:
             if df_gl.empty:
                 st.warning("Nenhum dado de Gain/Loss encontrado na pasta configurada.")
             elif modo_gl == "Piloto":
-                pilotos_gl = sorted(df_gl["Piloto"].dropna().unique().tolist())
+                # Só nomes de piloto (sem #numeral)
+                pilotos_gl = sorted(
+                    p for p in df_gl["Piloto"].dropna().unique().tolist()
+                    if not str(p).startswith("#")
+                )
                 piloto_gl = st.selectbox(
                     "Escolha o piloto:",
                     pilotos_gl,
                     key=f"gainloss_piloto_{config.year}",
                 )
                 mets = metricas_piloto(df_gl, piloto_gl)
-
-                def _fmt_metric(v):
-                    if v is None:
-                        return "N/A"
-                    return f"{v:.2f}"
-
-                c1, c2, c3, c4, c5 = st.columns(5)
-                with c1:
-                    st.metric("Média largada Sprint", _fmt_metric(mets["Média largada Sprint"]))
-                with c2:
-                    st.metric(
-                        "Média G/L corrida Sprint",
-                        _fmt_metric(mets["Média G/L corrida Sprint"]),
-                    )
-                with c3:
-                    st.metric(
-                        "Média largada Principal",
-                        _fmt_metric(mets["Média largada Principal"]),
-                    )
-                with c4:
-                    st.metric(
-                        "Média G/L corrida Principal",
-                        _fmt_metric(mets["Média G/L corrida Principal"]),
-                    )
-                with c5:
-                    st.metric(
-                        "Média G/L 1ª volta",
-                        _fmt_metric(mets["Média G/L 1ª volta"]),
-                    )
+                _painel_metricas_gain_loss(mets)
 
                 st.subheader(f"G/L 1ª volta por etapa — {piloto_gl}")
                 df_etapas_gl = tabela_piloto_por_etapa(df_gl, piloto_gl)
@@ -2049,7 +2103,11 @@ def render_season_page(config: SeasonConfig) -> None:
                 if not df_s.empty:
                     df_s.insert(0, "Ranking", range(1, len(df_s) + 1))
                     _exibir_dataframe(
-                        df_s.style.apply(colorir_piloto, axis=1), hide_index=True
+                        df_s.style.apply(colorir_piloto, axis=1).format({
+                            "Média G/L Corrida": "{:.1f}",
+                            "Média Largada": "{:.1f}",
+                        }),
+                        hide_index=True,
                     )
 
                 st.subheader("Média G/L corrida Principal")
@@ -2057,7 +2115,11 @@ def render_season_page(config: SeasonConfig) -> None:
                 if not df_p.empty:
                     df_p.insert(0, "Ranking", range(1, len(df_p) + 1))
                     _exibir_dataframe(
-                        df_p.style.apply(colorir_piloto, axis=1), hide_index=True
+                        df_p.style.apply(colorir_piloto, axis=1).format({
+                            "Média G/L Corrida": "{:.1f}",
+                            "Média Largada": "{:.1f}",
+                        }),
+                        hide_index=True,
                     )
 
                 st.subheader("Média G/L 1ª volta")
@@ -2065,7 +2127,10 @@ def render_season_page(config: SeasonConfig) -> None:
                 if not df_v1.empty:
                     df_v1.insert(0, "Ranking", range(1, len(df_v1) + 1))
                     _exibir_dataframe(
-                        df_v1.style.apply(colorir_piloto, axis=1), hide_index=True
+                        df_v1.style.apply(colorir_piloto, axis=1).format({
+                            "Média G/L 1ª Volta": "{:.1f}",
+                        }),
+                        hide_index=True,
                     )
 
             else:  # Pista
@@ -2073,10 +2138,25 @@ def render_season_page(config: SeasonConfig) -> None:
                 df_ps = ranking_pista_gl_corrida(df_gl, "Sprint")
                 if not df_ps.empty:
                     df_ps.insert(0, "Ranking", range(1, len(df_ps) + 1))
-                    _exibir_dataframe(df_ps, hide_index=True)
+                    _exibir_dataframe(
+                        df_ps.style.format({"Média G/L Corrida": "{:.1f}"}),
+                        hide_index=True,
+                    )
 
                 st.subheader("Média G/L corrida Principal por pista")
                 df_pp = ranking_pista_gl_corrida(df_gl, "Principal")
                 if not df_pp.empty:
                     df_pp.insert(0, "Ranking", range(1, len(df_pp) + 1))
-                    _exibir_dataframe(df_pp, hide_index=True)
+                    _exibir_dataframe(
+                        df_pp.style.format({"Média G/L Corrida": "{:.1f}"}),
+                        hide_index=True,
+                    )
+
+                st.subheader("Média G/L 1ª volta por pista")
+                df_pv = ranking_pista_gl_volta1(df_gl)
+                if not df_pv.empty:
+                    df_pv.insert(0, "Ranking", range(1, len(df_pv) + 1))
+                    _exibir_dataframe(
+                        df_pv.style.format({"Média G/L 1ª Volta": "{:.1f}"}),
+                        hide_index=True,
+                    )

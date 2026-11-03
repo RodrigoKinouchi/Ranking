@@ -56,3 +56,20 @@ def test_carregar_gera_gl_volta1():
     assert not (df["Etapa"] == 9).any()
     ranking = ranking_medio_gl_volta1(df)
     assert not ranking.empty
+
+
+def test_exclui_numerais_e_usa_nomes():
+    if not PASTA.is_dir():
+        return
+    regs = carregar_gain_loss_2026(PASTA, mapa_numeral_piloto={})
+    df = dataframe_registros(regs)
+    assert not df["Numeral"].isin([54, 72]).any()
+    assert not df["Piloto"].astype(str).str.startswith("#").any()
+    # Aliases pedidos
+    por_num = df.drop_duplicates("Numeral").set_index("Numeral")["Piloto"]
+    if 111 in por_num.index:
+        assert por_num.loc[111] == "Rubens Barrichello"
+    if 33 in por_num.index:
+        assert por_num.loc[33] == "Nelson Piquet Jr"
+    if 51 in por_num.index:
+        assert por_num.loc[51] == "Atila Abreu"
