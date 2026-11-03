@@ -25,7 +25,7 @@ from gain_loss_core import (
     tabela_piloto_por_etapa,
 )
 from ranking_core import (
-    caminho_imagem_piloto,
+    carregar_imagem_piloto,
     carregar_ignorar_qualifying,
     colunas_protegidas_descarte,
     detectar_ultima_corrida,
@@ -1127,7 +1127,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
             for i, piloto in enumerate(pilotos_com_max_vitorias_sprint):
                 with cols[i]:
-                    st.image(caminho_imagem_piloto(piloto), caption=piloto, width=150)
+                    st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
 
             fig_sprint = plotar_grafico_evolucao(
                 df, corridas_sprint, corridas_principal, tipo_corrida='Sprint')
@@ -1214,7 +1214,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
             for i, piloto in enumerate(pilotos_com_max_vitorias_principal):
                 with cols[i]:
-                    st.image(caminho_imagem_piloto(piloto), caption=piloto, width=150)
+                    st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
 
             st.write("## Ranking de Pilotos - Corridas Principal")
 
@@ -1560,7 +1560,7 @@ def render_season_page(config: SeasonConfig) -> None:
         # Exibir o 1º colocado no centro
         with col2:
             primeiro = top_3.iloc[0]
-            st.image(caminho_imagem_piloto(primeiro["Piloto"]),
+            st.image(carregar_imagem_piloto(primeiro["Piloto"]),
                      caption=primeiro["Piloto"], width=image_width)
             st.write(f"**{primeiro['Piloto']}**")
             st.write(f"Pódios: {primeiro['Pódios']}")
@@ -1571,7 +1571,7 @@ def render_season_page(config: SeasonConfig) -> None:
             st.write("")
             st.write("")
             segundo = top_3.iloc[1]
-            st.image(caminho_imagem_piloto(segundo["Piloto"]),
+            st.image(carregar_imagem_piloto(segundo["Piloto"]),
                      caption=segundo["Piloto"], width=image_width)
             st.write(f"**{segundo['Piloto']}**")
             st.write(f"Pódios: {segundo['Pódios']}")
@@ -1582,7 +1582,7 @@ def render_season_page(config: SeasonConfig) -> None:
             st.write("")
             st.write("")
             terceiro = top_3.iloc[2]
-            st.image(caminho_imagem_piloto(terceiro["Piloto"]),
+            st.image(carregar_imagem_piloto(terceiro["Piloto"]),
                      caption=terceiro["Piloto"], width=image_width)
             st.write(f"**{terceiro['Piloto']}**")
             st.write(f"Pódios: {terceiro['Pódios']}")
@@ -2038,7 +2038,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Função para exibir a imagem do piloto
         def exibir_imagem_piloto(piloto):
-            st.image(caminho_imagem_piloto(piloto), caption=piloto, width=150)
+            st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
 
         with col1:
             exibir_imagem_piloto(piloto1)

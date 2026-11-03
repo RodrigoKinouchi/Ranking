@@ -7,6 +7,8 @@ import plotly.graph_objs as go
 import matplotlib.pyplot as plt
 import os
 
+from ranking_core import carregar_imagem_piloto
+
 
 # Configurando o título da página URL
 st.set_page_config(
@@ -561,7 +563,7 @@ with tabs[2]:
 
         for i, piloto in enumerate(pilotos_com_max_vitorias_sprint):
             with cols[i]:
-                st.image(f'images/{piloto}.png', caption=piloto, width=150)
+                st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
 
         fig_sprint = plotar_grafico_evolucao(
             df, corridas_sprint, corridas_principal, tipo_corrida='Sprint')
@@ -637,7 +639,7 @@ with tabs[3]:
 
         for i, piloto in enumerate(pilotos_com_max_vitorias_principal):
             with cols[i]:
-                st.image(f'images/{piloto}.png', caption=piloto, width=150)
+                st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
 
         st.write("## Ranking de Pilotos - Corridas Principal")
 
@@ -1041,7 +1043,7 @@ with tabs[7]:
     # Exibir o 1º colocado no centro
     with col2:
         primeiro = top_3.iloc[0]
-        st.image(f'images/{primeiro["Piloto"]}.png',
+        st.image(carregar_imagem_piloto(primeiro["Piloto"]),
                  caption=primeiro["Piloto"], width=image_width)
         st.write(f"**{primeiro['Piloto']}**")
         st.write(f"Pódios: {primeiro['Pódios']}")
@@ -1052,7 +1054,7 @@ with tabs[7]:
         st.write("")
         st.write("")
         segundo = top_3.iloc[1]
-        st.image(f'images/{segundo["Piloto"]}.png',
+        st.image(carregar_imagem_piloto(segundo["Piloto"]),
                  caption=segundo["Piloto"], width=image_width)
         st.write(f"**{segundo['Piloto']}**")
         st.write(f"Pódios: {segundo['Pódios']}")
@@ -1063,7 +1065,7 @@ with tabs[7]:
         st.write("")
         st.write("")
         terceiro = top_3.iloc[2]
-        st.image(f'images/{terceiro["Piloto"]}.png',
+        st.image(carregar_imagem_piloto(terceiro["Piloto"]),
                  caption=terceiro["Piloto"], width=image_width)
         st.write(f"**{terceiro['Piloto']}**")
         st.write(f"Pódios: {terceiro['Pódios']}")
@@ -1473,11 +1475,7 @@ with tabs[10]:
 
     # Função para exibir a imagem do piloto
     def exibir_imagem_piloto(piloto):
-        image_path = f'images/{piloto}.png'
-        if os.path.exists(image_path):
-            st.image(image_path, caption=piloto, width=150)
-        else:
-            st.image('images/Pilotodesc.png', caption=piloto, width=150)
+        st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
 
     with col1:
         exibir_imagem_piloto(piloto1)

@@ -3,11 +3,16 @@ from __future__ import annotations
 import io
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from PIL import Image
 
-DEFAULT_PILOTO_IMG = os.path.join("images", "Pilotodesc.png")
+# Raiz do repo (onde está este módulo) — evita depender do cwd no Cloud/multipage.
+_REPO_ROOT = Path(__file__).resolve().parent
+_IMAGES_DIR = _REPO_ROOT / "images"
+DEFAULT_PILOTO_IMG = str((_IMAGES_DIR / "Pilotodesc.png").as_posix())
 
 PILOTO_IMAGE_ALIASES: dict[str, str] = {
     "Helio Castroneves": "Helio Castroneves",
@@ -262,9 +267,16 @@ def detectar_ultima_corrida(df: pd.DataFrame, fallback: int = 1) -> int:
 
 
 def caminho_imagem_piloto(nome_piloto: str) -> str:
+    """Caminho absoluto (posix) da foto do piloto, com fallback para Pilotodesc."""
     nome = PILOTO_IMAGE_ALIASES.get(nome_piloto, nome_piloto)
-    path = os.path.join("images", f"{nome}.png")
-    return path if os.path.isfile(path) else DEFAULT_PILOTO_IMG
+    path = _IMAGES_DIR / f"{nome}.png"
+    escolhido = path if path.is_file() else (_IMAGES_DIR / "Pilotodesc.png")
+    return str(escolhido.as_posix())
+
+
+def carregar_imagem_piloto(nome_piloto: str) -> Image.Image:
+    """Abre a foto do piloto via PIL (padrão confiável no st.image / Cloud)."""
+    return Image.open(caminho_imagem_piloto(nome_piloto))
 
 
 def _parece_token_equipe(token: str) -> bool:
