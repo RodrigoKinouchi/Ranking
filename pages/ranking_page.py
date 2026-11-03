@@ -54,15 +54,15 @@ def _carregar_df_gain_loss_cached(
 
 
 def _painel_metricas_gain_loss(mets: dict) -> None:
-    """Cards geométricos claros para as métricas da visão Piloto."""
+    """Cards no estilo do print: cinza claro, borda escura, texto centralizado."""
     st.markdown(
         """
 <style>
 .gl-metrics-wrap {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 0.4rem 0 1.1rem 0;
+  gap: 0.85rem;
+  margin: 0.5rem 0 1.2rem 0;
 }
 @media (max-width: 1100px) {
   .gl-metrics-wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -71,25 +71,28 @@ def _painel_metricas_gain_loss(mets: dict) -> None:
   .gl-metrics-wrap { grid-template-columns: 1fr; }
 }
 .gl-metric-card {
-  background: linear-gradient(180deg, #f7f7f8 0%, #efefef 100%);
-  border: 1px solid #d8d8d8;
+  background: #e6e6e6;
+  border: 2px solid #2b2b2b;
   border-radius: 14px;
-  padding: 0.95rem 1rem 1.05rem 1rem;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
-  min-height: 92px;
+  padding: 1rem 1.1rem 1.15rem 1.1rem;
+  text-align: center;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 .gl-metric-card .gl-label {
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  color: #6b6b6b;
-  margin-bottom: 0.45rem;
-  line-height: 1.25;
-  font-weight: 600;
+  font-size: 0.95rem;
+  color: #111111;
+  margin-bottom: 0.55rem;
+  line-height: 1.2;
+  font-weight: 500;
 }
 .gl-metric-card .gl-value {
-  font-size: 1.55rem;
+  font-size: 1.7rem;
   font-weight: 700;
-  color: #2a2a2a;
+  color: #111111;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -101,7 +104,7 @@ def _painel_metricas_gain_loss(mets: dict) -> None:
     def _fmt(v):
         if v is None:
             return "N/A"
-        return f"{v:.1f}"
+        return f"{v:.2f}"
 
     cards = [
         ("Média largada Sprint", mets["Média largada Sprint"]),
