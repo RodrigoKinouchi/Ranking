@@ -160,3 +160,22 @@ def test_massa_incidentes_fora_da_media_com_asterisco():
         {(6, "Sprint"), (7, "Principal")},
         [(6, "G/L V1 Sprint"), (7, "G/L V1 Principal")],
     )
+
+
+def test_salas_incidentes_fora_da_media_com_asterisco():
+    """Principal ET5 e ET7 do #85 ficam na tabela com * e fora da média."""
+    if not PASTA.is_dir():
+        return
+    assert (85, 5, "Principal") in IGNORAR_GL_VOLTA1
+    assert (85, 7, "Principal") in IGNORAR_GL_VOLTA1
+
+    df = dataframe_registros(
+        carregar_gain_loss_2026(PASTA, mapa_numeral_piloto={85: "Guilherme Salas"})
+    )
+    _assert_piloto_v1_ignoradas(
+        df,
+        85,
+        "Guilherme Salas",
+        {(5, "Principal"), (7, "Principal")},
+        [(5, "G/L V1 Principal"), (7, "G/L V1 Principal")],
+    )
