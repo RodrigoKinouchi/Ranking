@@ -25,6 +25,7 @@ from gain_loss_core import (
 )
 from ranking_core import (
     caminho_imagem_piloto,
+    carregar_ignorar_qualifying,
     colunas_protegidas_descarte,
     detectar_ultima_corrida,
     exportar_ranking_excel,
@@ -1691,13 +1692,26 @@ def render_season_page(config: SeasonConfig) -> None:
 
     with tabs[8]:
 
-        # Exceções de amostragem: Endurance (todas) + etapas por piloto (ex.: quebra do #30).
+        # Exceções: Endurance + config por piloto + Excel Ignorar_Qualy (por numeral).
         excecoes = config.qualifying_excecoes
+        ignorar_por_etapa = carregar_ignorar_qualifying(config.qualifying_dir)
 
-        def _etapa_fora_amostra_qualifying(etapa_num: int, piloto: str | None = None) -> bool:
+        def _numeral_ok(val) -> int | None:
+            num = pd.to_numeric(val, errors="coerce")
+            if pd.isna(num):
+                return None
+            return int(num)
+
+        def _etapa_fora_amostra_qualifying(
+            etapa_num: int,
+            piloto: str | None = None,
+            numeral: int | None = None,
+        ) -> bool:
             if etapa_num in config.endurance_etapas:
                 return True
             if piloto is not None and etapa_num in excecoes.get(piloto, []):
+                return True
+            if numeral is not None and numeral in ignorar_por_etapa.get(etapa_num, set()):
                 return True
             return False
 
@@ -1709,11 +1723,14 @@ def render_season_page(config: SeasonConfig) -> None:
             for etapa, df in dados_qualifying.items():
                 match = re.search(r'\d+', etapa)
                 etapa_num = int(match.group()) if match else None
-                if etapa_num is not None and _etapa_fora_amostra_qualifying(etapa_num):
+                if etapa_num is not None and etapa_num in config.endurance_etapas:
                     continue
                 for index, row in df.iterrows():
                     piloto = row['Piloto']
-                    if etapa_num is not None and _etapa_fora_amostra_qualifying(etapa_num, piloto):
+                    numeral = _numeral_ok(row['Numeral']) if 'Numeral' in row.index else None
+                    if etapa_num is not None and _etapa_fora_amostra_qualifying(
+                        etapa_num, piloto, numeral
+                    ):
                         continue
                     posicao = int(row['Posição'])
 
@@ -1742,16 +1759,17 @@ def render_season_page(config: SeasonConfig) -> None:
                 match = re.search(r'\d+', etapa)
                 etapa_num = int(match.group()) if match else etapa
 
+                piloto_data = df[df['Piloto'] == piloto_selecionado]
+                if piloto_data.empty:
+                    continue
+                numeral = _numeral_ok(piloto_data['Numeral'].values[0]) if 'Numeral' in piloto_data.columns else None
                 if isinstance(etapa_num, int) and _etapa_fora_amostra_qualifying(
-                    etapa_num, piloto_selecionado
+                    etapa_num, piloto_selecionado, numeral
                 ):
                     continue
 
-                # Filtra os dados do piloto
-                piloto_data = df[df['Piloto'] == piloto_selecionado]
-                if not piloto_data.empty:
-                    posicao = int(piloto_data['Posição'].values[0])
-                    posicoes.append(posicao)
+                posicao = int(piloto_data['Posição'].values[0])
+                posicoes.append(posicao)
 
             if posicoes:
                 posicao_media = sum(posicoes) / len(posicoes)
@@ -1764,6 +1782,13 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Carregue seus dados de qualifying
         dados_qualifying = carregar_dados_qualifying()
+
+        if ignorar_por_etapa:
+            n_ign = sum(len(v) for v in ignorar_por_etapa.values())
+            st.caption(
+                f"Amostragem: {n_ign} resultado(s) excluído(s) via Ignorar_Qualy "
+                f"(quebra/furo etc.) nas etapas {sorted(ignorar_por_etapa)}."
+            )
 
         # Contar avanços
         contagem_q2, contagem_q3, contagem_zona_inversao = contar_avancos(
@@ -1792,12 +1817,15 @@ def render_season_page(config: SeasonConfig) -> None:
         for etapa, df_etapa in dados_qualifying.items():
             match = re.search(r'\d+', etapa)
             etapa_num = int(match.group()) if match else None
+            piloto_data = df_etapa[df_etapa['Piloto'] == piloto_selecionado]
+            numeral = None
+            if not piloto_data.empty and 'Numeral' in piloto_data.columns:
+                numeral = _numeral_ok(piloto_data['Numeral'].values[0])
             if etapa_num is not None and _etapa_fora_amostra_qualifying(
-                etapa_num, piloto_selecionado
+                etapa_num, piloto_selecionado, numeral
             ):
                 continue
             etapas.append(etapa)
-            piloto_data = df_etapa[df_etapa['Piloto'] == piloto_selecionado]
             if not piloto_data.empty:
                 posicoes.append(int(piloto_data['Posição'].values[0]))
             else:

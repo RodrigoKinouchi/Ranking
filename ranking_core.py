@@ -335,6 +335,62 @@ def normalizar_pilotos_qualifying(
     return out
 
 
+def carregar_ignorar_qualifying(pasta_ou_arquivo: str) -> dict[int, set[int]]:
+    """
+    Lê Excel de exclusões (ex.: Ignorar_Qualy.xlsx).
+
+    Formato esperado: colunas ``Etapa N`` e células com numerais de carro
+    a ignorar na amostragem daquela etapa (quebra, furo, etc.).
+
+    Retorna ``{etapa: {numeral, ...}}``.
+    """
+    candidatos: list[str] = []
+    if os.path.isdir(pasta_ou_arquivo):
+        for nome in (
+            "Ignorar_Qualy.xlsx",
+            "Ignorar_qualifying.xlsx",
+            "Ignorar_Qualifying.xlsx",
+        ):
+            candidatos.append(os.path.join(pasta_ou_arquivo, nome))
+        # Qualquer xlsx cujo nome comece com Ignorar
+        try:
+            for f in os.listdir(pasta_ou_arquivo):
+                low = f.lower()
+                if low.startswith("ignorar") and low.endswith((".xlsx", ".xls")):
+                    candidatos.append(os.path.join(pasta_ou_arquivo, f))
+        except OSError:
+            pass
+    else:
+        candidatos.append(pasta_ou_arquivo)
+
+    caminho = next((c for c in candidatos if os.path.isfile(c)), None)
+    if not caminho:
+        return {}
+
+    try:
+        raw = pd.read_excel(caminho)
+    except OSError:
+        return {}
+
+    out: dict[int, set[int]] = {}
+    for col in raw.columns:
+        m = re.search(r"(\d+)", str(col))
+        if not m:
+            continue
+        etapa = int(m.group(1))
+        nums: set[int] = set()
+        for val in raw[col].tolist():
+            if pd.isna(val):
+                continue
+            num = pd.to_numeric(val, errors="coerce")
+            if pd.isna(num):
+                continue
+            nums.add(int(num))
+        if nums:
+            out[etapa] = nums
+    return out
+
+
 _TEMPO_VOLTA_RE = re.compile(r"^\d{1,2}:\d{2}\.\d{3}$")
 
 

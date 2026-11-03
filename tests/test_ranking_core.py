@@ -3,6 +3,7 @@ import pandas as pd
 from ranking_core import (
     _piloto_qualifying_de_tokens,
     _tempo_q1_endurance,
+    carregar_ignorar_qualifying,
     colunas_protegidas_descarte,
     corridas_logicas_da_etapa,
     detectar_ultima_corrida,
@@ -67,3 +68,14 @@ def test_qualifying_endurance_so_titular_e_tempo_q1():
     tokens = "CESAR RAMOS / NICOLAS COSTA MERCADO LIVRE RACING S 3:52.936 1:56.691 1:56.245".split()
     assert _piloto_qualifying_de_tokens(tokens) == "Cesar Ramos"
     assert _tempo_q1_endurance(tokens) == "1:56.691"
+
+
+def test_carregar_ignorar_qualifying_xlsx():
+    ign = carregar_ignorar_qualifying("qualifying2026")
+    if not ign:
+        return
+    assert 10 in ign
+    assert 30 in ign[10]
+    assert 1 in ign
+    assert 121 in ign[1]
+    assert 0 in ign[7]  # Cacá Bueno (#0)
