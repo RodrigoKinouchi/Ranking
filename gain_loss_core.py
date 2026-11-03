@@ -33,6 +33,8 @@ IGNORAR_GL_VOLTA1: set[tuple[int, int, str]] = {
     (21, 2, "Sprint"),  # Thiago Camilo — Cascavel
     (21, 4, "Sprint"),  # Thiago Camilo — Goiânia
     (21, 5, "Principal"),  # Thiago Camilo — Cuiabá
+    (19, 6, "Sprint"),  # Felipe Massa — Velocitta
+    (19, 7, "Principal"),  # Felipe Massa — Santa Cruz do Sul
 }
 
 # Garante nome mesmo se a tabela do campeonato não tiver o numeral.

@@ -101,6 +101,28 @@ def test_pista_usa_apenas_gl_positivo():
     assert (ranking["Total posições ganhas"] >= 0).all()
 
 
+def _assert_piloto_v1_ignoradas(df, numeral: int, piloto: str, chaves: set[tuple[int, str]], celulas: list[tuple[int, str]]):
+    """Valida * na tabela e exclusão das amostras da média/ranking V1."""
+    sub = df[df["Numeral"] == numeral]
+    assert not sub.empty
+    marcadas = sub[sub["Ignorar V1"]]
+    assert len(marcadas) == len(chaves)
+    assert set(zip(marcadas["Etapa"], marcadas["Tipo"])) == chaves
+
+    tabela = tabela_piloto_por_etapa(df, piloto)
+    for etapa, col in celulas:
+        assert str(tabela[tabela["Etapa"] == etapa].iloc[0][col]).endswith("*")
+
+    mets = metricas_piloto(df, piloto)
+    validas = sub.loc[~sub["Ignorar V1"] & sub["G/L Volta 1"].notna(), "G/L Volta 1"]
+    assert mets["Média G/L 1ª volta"] == float(validas.mean())
+
+    ranking = ranking_medio_gl_volta1(df)
+    row_rank = ranking[ranking["Piloto"] == piloto]
+    assert not row_rank.empty
+    assert int(row_rank.iloc[0]["Amostras"]) == len(validas)
+
+
 def test_camilo_incidentes_fora_da_media_com_asterisco():
     """Sprint ET2/ET4 e Principal ET5 do #21 ficam na tabela com * e fora da média."""
     if not PASTA.is_dir():
@@ -109,36 +131,32 @@ def test_camilo_incidentes_fora_da_media_com_asterisco():
     assert (21, 4, "Sprint") in IGNORAR_GL_VOLTA1
     assert (21, 5, "Principal") in IGNORAR_GL_VOLTA1
 
-    regs = carregar_gain_loss_2026(
-        PASTA, mapa_numeral_piloto={21: "Thiago Camilo"}
+    df = dataframe_registros(
+        carregar_gain_loss_2026(PASTA, mapa_numeral_piloto={21: "Thiago Camilo"})
     )
-    df = dataframe_registros(regs)
-    camilo = df[df["Numeral"] == 21]
-    assert not camilo.empty
+    _assert_piloto_v1_ignoradas(
+        df,
+        21,
+        "Thiago Camilo",
+        {(2, "Sprint"), (4, "Sprint"), (5, "Principal")},
+        [(2, "G/L V1 Sprint"), (4, "G/L V1 Sprint"), (5, "G/L V1 Principal")],
+    )
 
-    marcadas = camilo[camilo["Ignorar V1"]]
-    assert len(marcadas) == 3
-    assert set(zip(marcadas["Etapa"], marcadas["Tipo"])) == {
-        (2, "Sprint"),
-        (4, "Sprint"),
-        (5, "Principal"),
-    }
 
-    tabela = tabela_piloto_por_etapa(df, "Thiago Camilo")
-    row2 = tabela[tabela["Etapa"] == 2].iloc[0]
-    row4 = tabela[tabela["Etapa"] == 4].iloc[0]
-    row5 = tabela[tabela["Etapa"] == 5].iloc[0]
-    assert str(row2["G/L V1 Sprint"]).endswith("*")
-    assert str(row4["G/L V1 Sprint"]).endswith("*")
-    assert str(row5["G/L V1 Principal"]).endswith("*")
+def test_massa_incidentes_fora_da_media_com_asterisco():
+    """Sprint ET6 e Principal ET7 do #19 ficam na tabela com * e fora da média."""
+    if not PASTA.is_dir():
+        return
+    assert (19, 6, "Sprint") in IGNORAR_GL_VOLTA1
+    assert (19, 7, "Principal") in IGNORAR_GL_VOLTA1
 
-    # Média V1 do piloto ignora as 3 amostras marcadas
-    mets = metricas_piloto(df, "Thiago Camilo")
-    validas = camilo.loc[~camilo["Ignorar V1"] & camilo["G/L Volta 1"].notna(), "G/L Volta 1"]
-    assert mets["Média G/L 1ª volta"] == float(validas.mean())
-
-    # Ranking geral também exclui as marcadas
-    ranking = ranking_medio_gl_volta1(df)
-    row_rank = ranking[ranking["Piloto"] == "Thiago Camilo"]
-    assert not row_rank.empty
-    assert int(row_rank.iloc[0]["Amostras"]) == len(validas)
+    df = dataframe_registros(
+        carregar_gain_loss_2026(PASTA, mapa_numeral_piloto={19: "Felipe Massa"})
+    )
+    _assert_piloto_v1_ignoradas(
+        df,
+        19,
+        "Felipe Massa",
+        {(6, "Sprint"), (7, "Principal")},
+        [(6, "G/L V1 Sprint"), (7, "G/L V1 Principal")],
+    )
