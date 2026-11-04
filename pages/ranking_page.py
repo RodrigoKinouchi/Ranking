@@ -46,6 +46,113 @@ def _exibir_dataframe(df, **kwargs):
     st.dataframe(df, **kwargs)
 
 
+# Cores pessoais dos pilotos destacados nas tabelas (alinhado a colorir_piloto).
+PILOTO_CORES_DESTAQUE: dict[str, str] = {
+    "Gabriel Casagrande": "purple",
+    "Lucas Foresti": "gray",
+    "Cesar Ramos": "yellow",
+    "Thiago Camilo": "red",
+    "Helio Castroneves": "green",
+    "Renan Guerra": "#89CFF0",
+}
+
+_PIZZA_BORDA = dict(color="#0e1117", width=1.5)
+
+
+def _mapa_cor_piloto(df: pd.DataFrame) -> dict[str, str]:
+    """Piloto → cor: destaque pessoal, senão cor da equipe, senão cinza."""
+    mapa: dict[str, str] = {}
+    if "Piloto" not in df.columns or "Equipe" not in df.columns:
+        return mapa
+    pares = df.drop_duplicates("Piloto")[["Piloto", "Equipe"]]
+    for _, row in pares.iterrows():
+        piloto = str(row["Piloto"])
+        if piloto in PILOTO_CORES_DESTAQUE:
+            mapa[piloto] = PILOTO_CORES_DESTAQUE[piloto]
+        else:
+            mapa[piloto] = cor_equipe_2026(row["Equipe"])
+    return mapa
+
+
+def _aplicar_divisoria_pizza(fig) -> None:
+    """Linha fina entre fatias (tema escuro)."""
+    fig.update_traces(marker=dict(line=_PIZZA_BORDA))
+
+
+def _fig_pizza_vitorias_piloto(
+    vitorias: dict[str, int],
+    *,
+    titulo: str,
+    mapa_cores: dict[str, str],
+    col_valores: str = "Vitórias",
+):
+    """Donut de vitórias por piloto com cor estável, borda e total no centro."""
+    data = (
+        pd.DataFrame(
+            {
+                "Piloto": list(vitorias.keys()),
+                col_valores: list(vitorias.values()),
+            }
+        )
+        .sort_values(by=col_valores, ascending=False)
+        .reset_index(drop=True)
+    )
+    total = int(data[col_valores].sum())
+    cores = {
+        p: mapa_cores.get(p, "lightgray") for p in data["Piloto"]
+    }
+
+    fig = px.pie(
+        data,
+        names="Piloto",
+        values=col_valores,
+        title=titulo,
+        hole=0.38,
+        color="Piloto",
+        color_discrete_map=cores,
+    )
+    _aplicar_divisoria_pizza(fig)
+    fig.update_traces(
+        textinfo="percent",
+        textposition="inside",
+        insidetextorientation="horizontal",
+        insidetextfont=dict(color="white", size=13),
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            f"{col_valores}: %{{value}}<br>"
+            "%{percent}<extra></extra>"
+        ),
+    )
+    fig.update_layout(
+        title_x=0.5,
+        title_y=0.95,
+        showlegend=True,
+        legend_title_text="Pilotos",
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=12),
+        ),
+        margin=dict(t=60, b=40, l=40, r=180),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        annotations=[
+            dict(
+                text=f"<b>{total}</b><br>vitórias",
+                x=0.5,
+                y=0.5,
+                font=dict(size=16, color="#e2e8f0"),
+                showarrow=False,
+                align="center",
+            )
+        ],
+    )
+    return fig
+
+
 def _assinatura_arquivos_gain_loss(pasta: str) -> tuple[tuple[str, float], ...]:
     """Mtimes dos arquivos da pasta — invalida o cache quando o CSV/PDF muda."""
     root = Path(pasta)
@@ -589,6 +696,7 @@ def render_season_page(config: SeasonConfig) -> None:
     color_map_equipes_pie = {
         equipe: cor_equipe_2026(equipe) for equipe in vitorias_df["Equipe"]
     }
+    color_map_pilotos_pie = _mapa_cor_piloto(df)
 
     fig_sprint_equipes = px.pie(
         vitorias_df,
@@ -598,6 +706,7 @@ def render_season_page(config: SeasonConfig) -> None:
         color="Equipe",
         color_discrete_map=color_map_equipes_pie,
     )
+    _aplicar_divisoria_pizza(fig_sprint_equipes)
 
     fig_principal_equipes = px.pie(
         vitorias_df,
@@ -607,6 +716,7 @@ def render_season_page(config: SeasonConfig) -> None:
         color="Equipe",
         color_discrete_map=color_map_equipes_pie,
     )
+    _aplicar_divisoria_pizza(fig_principal_equipes)
 
     fig_total_equipes = px.pie(
         vitorias_df,
@@ -616,6 +726,7 @@ def render_season_page(config: SeasonConfig) -> None:
         color="Equipe",
         color_discrete_map=color_map_equipes_pie,
     )
+    _aplicar_divisoria_pizza(fig_total_equipes)
 
 
     def plotar_grafico_evolucao(df, corridas_sprint, corridas_principal, tipo_corrida):
@@ -1082,36 +1193,12 @@ def render_season_page(config: SeasonConfig) -> None:
 
         # Criar gráfico de pizza para vitórias nas corridas Sprint
         if vitorias_sprint_filtradas:
-            data_sprint = {
-                "Piloto": list(vitorias_sprint_filtradas.keys()),
-                "Vitórias Sprint": list(vitorias_sprint_filtradas.values())
-            }
-
-            fig_sprint = px.pie(data_sprint,
-                                names="Piloto",
-                                values="Vitórias Sprint",
-                                title="Vitórias nas Corridas Sprint",
-                                hole=0.3,  # Tornar o gráfico de pizza "donut"
-                                color="Vitórias Sprint"  # Cores baseadas nas vitórias
-                                )
-
-            fig_sprint.update_layout(
-                title_x=0.42,  # Centralizando o título
-                title_y=0.95,  # Ajustando a posição do título
-                showlegend=True,
-                legend_title="Pilotos",
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.15,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(size=12),
-                ),
-                margin=dict(t=60, b=100, l=40, r=40)
+            fig_sprint = _fig_pizza_vitorias_piloto(
+                vitorias_sprint_filtradas,
+                titulo="Vitórias nas Corridas Sprint",
+                mapa_cores=color_map_pilotos_pie,
+                col_valores="Vitórias Sprint",
             )
-
-            # Exibindo o gráfico de vitórias Sprint
             st.plotly_chart(fig_sprint)
 
             # Identificar os pilotos com mais vitórias
@@ -1169,36 +1256,12 @@ def render_season_page(config: SeasonConfig) -> None:
     with tabs[3]:
         # Criar gráfico de pizza para vitórias nas corridas Principal
         if vitorias_principal_filtradas:
-            data_principal = {
-                "Piloto": list(vitorias_principal_filtradas.keys()),
-                "Vitórias Principal": list(vitorias_principal_filtradas.values())
-            }
-
-            fig_principal = px.pie(data_principal,
-                                   names="Piloto",
-                                   values="Vitórias Principal",
-                                   title="Vitórias nas Corridas Principais",
-                                   hole=0.3,  # Tornar o gráfico de pizza "donut"
-                                   color="Vitórias Principal"  # Cores baseadas nas vitórias
-                                   )
-
-            fig_principal.update_layout(
-                title_x=0.45,  # Centralizando o título
-                title_y=0.95,  # Ajustando a posição do título
-                showlegend=True,
-                legend_title="Pilotos",
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.15,
-                    xanchor="center",
-                    x=0.5,
-                    font=dict(size=12),
-                ),
-                margin=dict(t=60, b=100, l=40, r=40)
+            fig_principal = _fig_pizza_vitorias_piloto(
+                vitorias_principal_filtradas,
+                titulo="Vitórias nas Corridas Principais",
+                mapa_cores=color_map_pilotos_pie,
+                col_valores="Vitórias Principal",
             )
-
-            # Exibindo o gráfico de vitórias Principal
             st.plotly_chart(fig_principal)
 
             # Identificar os pilotos com mais vitórias
