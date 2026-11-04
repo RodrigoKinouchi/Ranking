@@ -93,6 +93,45 @@ def _aplicar_divisoria_pizza(fig) -> None:
     fig.update_traces(marker=dict(line=_PIZZA_BORDA))
 
 
+def _exibir_piloto_com_vitorias(piloto: str, vitorias: int, *, width: int = 150) -> None:
+    """Foto circular com badge cinza arredondado mostrando a quantidade de vitórias."""
+    from html import escape
+
+    uri = carregar_imagem_piloto(piloto)
+    nome = escape(str(piloto))
+    qtd = int(vitorias)
+    st.markdown(
+        f"""
+<div style="text-align:center; width:{width}px; margin:0 auto 0.75rem auto;">
+  <div style="position:relative; display:inline-block; width:{width}px;">
+    <div style="
+      position:absolute;
+      top:-8px;
+      left:50%;
+      transform:translateX(-50%);
+      background:#9ca3af;
+      color:#111111;
+      font-weight:700;
+      font-size:0.95rem;
+      line-height:1.2;
+      padding:3px 12px;
+      border-radius:10px;
+      border:1px solid #6b7280;
+      z-index:2;
+      min-width:1.75rem;
+      box-sizing:border-box;
+    ">{qtd}</div>
+    <img src="{uri}" alt="{nome}" width="{width}" height="{width}"
+         style="width:{width}px; height:{width}px; border-radius:50%;
+                object-fit:cover; display:block;" />
+  </div>
+  <div style="margin-top:0.45rem; color:#cbd5e1; font-size:0.9rem;">{nome}</div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _fig_pizza_vitorias_piloto(
     vitorias: dict[str, int],
     *,
@@ -1238,7 +1277,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
             for i, piloto in enumerate(pilotos_com_max_vitorias_sprint):
                 with cols[i]:
-                    st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
+                    _exibir_piloto_com_vitorias(piloto, max_vitorias_sprint)
 
             fig_sprint = plotar_grafico_evolucao(
                 df, corridas_sprint, corridas_principal, tipo_corrida='Sprint')
@@ -1301,7 +1340,7 @@ def render_season_page(config: SeasonConfig) -> None:
 
             for i, piloto in enumerate(pilotos_com_max_vitorias_principal):
                 with cols[i]:
-                    st.image(carregar_imagem_piloto(piloto), caption=piloto, width=150)
+                    _exibir_piloto_com_vitorias(piloto, max_vitorias_principal)
 
             st.write("## Ranking de Pilotos - Corridas Principal")
 
