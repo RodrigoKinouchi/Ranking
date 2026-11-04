@@ -57,6 +57,8 @@ PILOTO_CORES_DESTAQUE: dict[str, str] = {
 }
 
 _PIZZA_BORDA = dict(color="#0e1117", width=1.5)
+# Domínio do donut (paper); título e total ficam no centro desse intervalo.
+_PIZZA_DOMAIN_X = (0.0, 0.70)
 
 
 def _mapa_cor_piloto(df: pd.DataFrame) -> dict[str, str]:
@@ -72,6 +74,18 @@ def _mapa_cor_piloto(df: pd.DataFrame) -> dict[str, str]:
         else:
             mapa[piloto] = cor_equipe_2026(row["Equipe"])
     return mapa
+
+
+def _cor_texto_contraste(cor: str) -> str:
+    """Preto em fundos claros, branco em fundos escuros."""
+    from matplotlib.colors import to_rgb
+
+    try:
+        r, g, b = to_rgb(cor)
+    except ValueError:
+        return "#FFFFFF"
+    luminancia = 0.299 * r + 0.587 * g + 0.114 * b
+    return "#111111" if luminancia > 0.55 else "#FFFFFF"
 
 
 def _aplicar_divisoria_pizza(fig) -> None:
@@ -98,9 +112,10 @@ def _fig_pizza_vitorias_piloto(
         .reset_index(drop=True)
     )
     total = int(data[col_valores].sum())
-    cores = {
-        p: mapa_cores.get(p, "lightgray") for p in data["Piloto"]
-    }
+    ordem_pilotos = data["Piloto"].tolist()
+    cores = {p: mapa_cores.get(p, "lightgray") for p in ordem_pilotos}
+    cores_texto = [_cor_texto_contraste(cores[p]) for p in ordem_pilotos]
+    centro_x = (_PIZZA_DOMAIN_X[0] + _PIZZA_DOMAIN_X[1]) / 2
 
     fig = px.pie(
         data,
@@ -110,13 +125,15 @@ def _fig_pizza_vitorias_piloto(
         hole=0.38,
         color="Piloto",
         color_discrete_map=cores,
+        category_orders={"Piloto": ordem_pilotos},
     )
     _aplicar_divisoria_pizza(fig)
     fig.update_traces(
         textinfo="percent",
         textposition="inside",
         insidetextorientation="horizontal",
-        insidetextfont=dict(color="white", size=13),
+        textfont=dict(color=cores_texto, size=13),
+        domain=dict(x=list(_PIZZA_DOMAIN_X), y=[0.05, 0.92]),
         hovertemplate=(
             "<b>%{label}</b><br>"
             f"{col_valores}: %{{value}}<br>"
@@ -124,8 +141,13 @@ def _fig_pizza_vitorias_piloto(
         ),
     )
     fig.update_layout(
-        title_x=0.5,
-        title_y=0.95,
+        title=dict(
+            text=titulo,
+            x=centro_x,
+            xanchor="center",
+            y=0.98,
+            yanchor="top",
+        ),
         showlegend=True,
         legend_title_text="Pilotos",
         legend=dict(
@@ -133,17 +155,19 @@ def _fig_pizza_vitorias_piloto(
             yanchor="middle",
             y=0.5,
             xanchor="left",
-            x=1.02,
+            x=_PIZZA_DOMAIN_X[1] + 0.03,
             font=dict(size=12),
         ),
-        margin=dict(t=60, b=40, l=40, r=180),
+        margin=dict(t=55, b=30, l=20, r=40),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         annotations=[
             dict(
                 text=f"<b>{total}</b><br>vitórias",
-                x=0.5,
-                y=0.5,
+                x=centro_x,
+                y=0.48,
+                xref="paper",
+                yref="paper",
                 font=dict(size=16, color="#e2e8f0"),
                 showarrow=False,
                 align="center",
